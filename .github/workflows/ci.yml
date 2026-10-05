@@ -47,6 +47,43 @@ jobs:
         env:
           PLATFORM: ${{ matrix.platform }}
         run: pnpm --dir apps/mobile exec expo export --platform "$PLATFORM" --output-dir "dist/$PLATFORM"
+  android-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 24
+      - uses: pnpm/action-setup@f40ffcd9367d9f12939873eb1018b921a783ffaa # v4
+      - run: pnpm install --frozen-lockfile
+      - name: Build Android APK
+        run: |
+          pnpm --dir apps/mobile exec expo prebuild --platform android --no-install
+          apps/mobile/android/gradlew -p apps/mobile/android assembleRelease
+      - name: Install and launch on Android emulator
+        uses: ReactiveCircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2.38.0
+        with:
+          api-level: 35
+          target: google_apis
+          arch: x86_64
+          script: |
+            adb install apps/mobile/android/app/build/outputs/apk/release/app-release.apk
+            adb logcat -c
+            adb shell monkey -p app.openmuse.mobile 1
+            for attempt in $(seq 1 30); do
+              if adb shell uiautomator dump /sdcard/window.xml >/dev/null 2>&1 &&
+                adb shell cat /sdcard/window.xml | grep -Fq "Welcome to OpenMuse."; then
+                break
+              fi
+              sleep 1
+            done
+            adb shell cat /sdcard/window.xml | grep -F "Welcome to OpenMuse."
+            if adb logcat -d -s AndroidRuntime ReactNativeJS | grep -E "FATAL EXCEPTION|Unhandled JS Exception"; then
+              exit 1
+            fi
   browser:
     runs-on: ubuntu-latest
     timeout-minutes: 15
