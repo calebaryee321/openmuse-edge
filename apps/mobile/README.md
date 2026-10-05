@@ -36,7 +36,7 @@ pnpm --dir apps/mobile build:android
 
 The `build:ios` and `build:android` commands validate and export platform JavaScript/Hermes bundles. They do not create signed installable apps. `ios` and `android` run Expo’s native development-build workflows and need the platform toolchains.
 
-CI also builds an Android release APK, connects it to an isolated sample API on an API 35 emulator, and verifies that the authenticated workspace navigation appears without a fatal native or JavaScript exception. This smoke test does not cover delegated chat actions or physical devices.
+CI also builds an Android release APK, publishes it as the `openmuse-android-apk` workflow artifact for seven days, connects it to an isolated sample API on an API 35 emulator, and verifies that the authenticated workspace navigation appears without a fatal native or JavaScript exception. Download the APK from the successful `android-smoke` workflow run's **Artifacts** section. This smoke test does not cover delegated chat actions or physical devices.
 
 ## Behavior
 

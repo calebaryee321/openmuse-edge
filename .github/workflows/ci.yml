@@ -63,6 +63,13 @@ jobs:
         run: |
           pnpm --dir apps/mobile exec expo prebuild --platform android --no-install
           apps/mobile/android/gradlew -p apps/mobile/android assembleRelease
+      - name: Publish installable Android APK
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: openmuse-android-apk
+          path: apps/mobile/android/app/build/outputs/apk/release/app-release.apk
+          if-no-files-found: error
+          retention-days: 7
       - name: Start isolated sample API
         env:
           CPK_INTELLIGENCE_API_KEY: android-smoke-test-project-key
