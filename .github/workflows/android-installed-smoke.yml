@@ -61,10 +61,20 @@ jobs:
           echo "path=$APK" >> "$GITHUB_OUTPUT"
           ls -lh "$APK"
 
+      - name: Expose Android SDK command-line tools
+        shell: bash
+        run: |
+          echo "$ANDROID_SDK_ROOT/platform-tools" >> "$GITHUB_PATH"
+          echo "$ANDROID_SDK_ROOT/emulator" >> "$GITHUB_PATH"
+          SDKMANAGER="$(find "$ANDROID_SDK_ROOT/cmdline-tools" -type f -name sdkmanager | head -n 1)"
+          test -x "$SDKMANAGER"
+          echo "$(dirname "$SDKMANAGER")" >> "$GITHUB_PATH"
+          echo "sdkmanager=$SDKMANAGER"
+
       - name: Install Android emulator image
         shell: bash
         run: |
-          yes | sdkmanager --licenses >/dev/null
+          yes | sdkmanager --licenses >/dev/null || true
           sdkmanager "platform-tools" "emulator" "platforms;android-35" "system-images;android-35;google_apis;x86_64"
 
       - name: Enable KVM
