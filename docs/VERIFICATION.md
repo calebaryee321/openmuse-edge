@@ -7,6 +7,7 @@ September 16, 2026 · Capybara and distinct mobile/web demos, following the agen
 - **154 tests pass**, with no failures or skipped tests, across the API, task engine, integrations, computer lifecycle, Docker runner, conversation queue, browser address handling, domain, and native date handling. Five new checks cover email search/read ownership, disconnected mail, evidence-based demo replies, and exhibit extraction without navigation noise.
 - Biome formatting/lint, server/mobile/browser-worker TypeScript checks, and the server build pass.
 - Expo exports web, iOS Hermes, and Android Hermes bundles. These exports do not produce signed native binaries.
+- The Android emulator CI job additionally builds and installs a release APK on API 35, then checks for the welcome screen and fatal native/JavaScript startup errors. This does not cover authenticated workspace workflows or physical devices.
 - The **real Chromium lifecycle test passes**: public page navigation/read, failed profile cleanup, same-UUID reopen, text truncation, and localStorage/profile persistence after restart.
 - The **real Docker computer smoke test passes** against the isolated `colima-openmuse` context: local image build, nonroot commands, read-only system files, disabled network, capped output, text editing, symlink rejection, PDF byte-preserving import/export, stop/start file persistence, and interruption of an actually running command. Its disposable container and volume are removed after the test.
 - CI now includes a separate computer-container build/smoke job. Its YAML parses with unique keys and valid workflow triggers. The existing browser-container CI job was not rerun locally for this release; remote CI results remain separate from these local checks.
@@ -39,7 +40,7 @@ September 16, 2026 · Capybara and distinct mobile/web demos, following the agen
 | Identity / memory | Edit, persist, and forget paths are tested through the authenticated API. | Single owner per deployment. |
 | Rich Threads | Tests through the real CopilotKit runtime cover authenticated owner scoping, main-thread provisioning/recovery, pagination, rename, archive, rich tool history, provider failures, and server-only key handling. A real CopilotKit Core failure verifies that queued messages pause when the SDK emits an error but resolves its promise. | Intelligence boundary is mocked in tests. Live WebSocket persistence/replay and cross-device acceptance need a project key. |
 | OpenBot | Disabled adapter has protocol and identity contract tests against a pinned public revision, including computer gateway, takeover, refusal, and uncertain outcomes. | No live identity, routine, or computer backend bridge yet. |
-| Native / web UI | iPhone simulator and web preview have been exercised. Native acceptance covers actual task/results navigation, PDF pages, browser navigation, Linux Terminal and Files, finance, and goals. | Android is bundle-validated, not installed on a device/emulator. |
+| Native / web UI | iPhone simulator and web preview have been exercised. CI installs the Android APK on an API 35 emulator and checks app startup. | Android authenticated workflows and physical-device behavior remain untested; iPhone acceptance covers task/results navigation, PDF pages, browser navigation, Linux Terminal and Files, finance, and goals. |
 
 ## Release fixes and interface polish
 
