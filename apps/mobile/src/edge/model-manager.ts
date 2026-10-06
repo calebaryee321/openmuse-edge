@@ -213,6 +213,14 @@ class EdgeModelManager {
       }
 
       const info = await FileSystem.getInfoAsync(result.uri);
+      const expectedSha = MODEL_DOWNLOADS[modelId].sha256;
+      const actualSha = expectedSha ? await OpenMuseEdge.sha256File(result.uri) : null;
+
+      if (expectedSha && actualSha.toLowerCase() !== expectedSha.toLowerCase()) {
+        await FileSystem.deleteAsync(result.uri, { idempotent: true }).catch(() => {});
+        throw new Error("Downloaded model checksum did not match the catalog. The file was removed.");
+      }
+
       const metadata: PersistedModelMetadata = {
         modelId,
         version: 1,
@@ -220,7 +228,7 @@ class EdgeModelManager {
         localUri: result.uri,
         installedAt: new Date().toISOString(),
         expectedBytes: info.exists && !info.isDirectory ? info.size : undefined,
-        sha256: MODEL_DOWNLOADS[modelId].sha256 ?? null,
+        sha256: actualSha,
       };
 
       await writeJson(metaUri(modelId), metadata);
