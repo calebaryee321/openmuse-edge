@@ -55,13 +55,25 @@ export function LanguageLearning() {
   const [level, setLevel] = useState<string>("Beginner");
   const [mode, setMode] = useState<string>("Conversation");
   const [profile, setProfile] = useState<LanguageLearnerProfile>({
+    schemaVersion: 2,
     language: "French",
     level: "Beginner",
     totalTurns: 0,
+    totalSessions: 0,
     goals: ["Hold practical everyday conversations"],
     weakPoints: [],
     vocabulary: [],
     recentCorrections: [],
+    skillBands: {
+      interaction: 0,
+      listening: 0,
+      reading: 0,
+      accuracy: 0,
+      culture: 0,
+    },
+    errorPatterns: [],
+    reviewQueue: [],
+    completedMissions: [],
   });
   const [handoffs, setHandoffs] = useState<AgentHandoff[]>([]);
   const [turns, setTurns] = useState<LocalTurn[]>([]);
