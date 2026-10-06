@@ -14,6 +14,7 @@ import {
   recommendFrenchMission,
   type LanguageMission,
 } from "./language-missions";
+import { edgeModelManager } from "./model-manager";
 import { useEdgeModel } from "./use-model-manager";
 
 const LANGUAGES = ["French", "Spanish", "Italian", "German"] as const;
@@ -94,6 +95,31 @@ export function LanguageLearning() {
     });
   }, []);
 
+  useEffect(() => {
+    let active = true;
+
+    void (async () => {
+      try {
+        await edgeModelManager.refresh("muse");
+        const snapshot = edgeModelManager.getSnapshot("muse");
+        if (
+          active &&
+          snapshot.localUri &&
+          snapshot.state !== "loaded" &&
+          snapshot.state !== "loading"
+        ) {
+          await edgeModelManager.load("muse", "auto");
+        }
+      } catch (value) {
+        if (active) setError(value instanceof Error ? value.message : String(value));
+      }
+    })();
+
+    return () => {
+      active = false;
+    };
+  }, []);
+
 
   const recommendedMission = useMemo(
     () =>
@@ -155,6 +181,23 @@ export function LanguageLearning() {
         <Chip tint={colors.lavender}>{profile.totalTurns} practice turns</Chip>
       </View>
 
+      {muse.state === "loading" && (
+        <Card
+          style={{
+            padding: 14,
+            gap: 4,
+            backgroundColor: colors.sky,
+            borderRadius: 18,
+          }}
+        >
+          <Text style={[s.heading, { fontSize: 15 }]}>Starting Muse locally</Text>
+          <Text style={s.small}>
+            First startup can take several seconds. OpenMuse is loading the model already stored on
+            this phone — it is not downloading it again.
+          </Text>
+        </Card>
+      )}
+
       <View style={{ gap: 8 }}>
         <Text style={s.label}>Language</Text>
         <View style={[s.row, { gap: 7, flexWrap: "wrap" }]}>
@@ -206,7 +249,7 @@ export function LanguageLearning() {
           </Text>
           <Button
             primary
-            busy={busy}
+            busy={busy || muse.state === "loading"}
             onPress={() => {
               setActiveMission(recommendedMission);
               setTurns([]);
@@ -287,7 +330,7 @@ export function LanguageLearning() {
           </Text>
           <Button
             primary
-            busy={busy}
+            busy={busy || muse.state === "loading"}
             onPress={() =>
               void practice(
                 mode === "Travel role-play"
