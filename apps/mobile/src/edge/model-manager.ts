@@ -176,7 +176,24 @@ class EdgeModelManager {
     ]);
 
     const runtime = OpenMuseEdge.getRuntimeStats();
-    const installed = Boolean(info.exists && !info.isDirectory && metadata?.artifact === MODEL_DOWNLOADS[modelId].artifact);
+    const hasModelFile = Boolean(info.exists && !info.isDirectory && (info.size ?? 0) > 0);
+    const metadataMatches = metadata?.artifact === MODEL_DOWNLOADS[modelId].artifact;
+    const installed = hasModelFile && (metadataMatches || metadata == null);
+
+    // The downloaded model file is the durable source of truth. Recover the
+    // small metadata record after an app update instead of forcing a re-download.
+    if (installed && metadata == null) {
+      await writeJson(metaUri(modelId), {
+        modelId,
+        version: 1,
+        artifact: MODEL_DOWNLOADS[modelId].artifact,
+        localUri: modelUri(modelId),
+        installedAt: new Date().toISOString(),
+        expectedBytes: info.exists && !info.isDirectory ? info.size : undefined,
+        sha256: null,
+      } satisfies PersistedModelMetadata);
+    }
+
     const loaded = installed && runtime.loaded && runtime.modelPath === modelUri(modelId);
 
     this.update(modelId, {
@@ -340,7 +357,13 @@ class EdgeModelManager {
       return runtime;
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      this.update(modelId, { state: "error", error: message });
+      // Loading and installation are separate states. A runtime failure must
+      // never make an already-downloaded model look missing.
+      this.update(modelId, {
+        state: current.localUri ? "installed" : "error",
+        localUri: current.localUri,
+        error: message,
+      });
       throw error;
     }
   }
