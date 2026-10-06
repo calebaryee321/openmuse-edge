@@ -271,7 +271,11 @@ function MuseModelControls() {
   const progressLabel =
     model.state === "downloading"
       ? `${Math.round(model.progress * 100)}%`
-      : model.state.replace(/-/g, " ");
+      : model.state === "loaded"
+        ? "ready"
+        : model.localUri
+          ? "downloaded"
+          : model.state.replace(/-/g, " ");
 
   async function act(work: () => Promise<unknown>) {
     setBusy(true);
@@ -347,7 +351,7 @@ function MuseModelControls() {
         </>
       )}
 
-      {(model.state === "not-installed" || model.state === "error") && (
+      {!model.localUri && (model.state === "not-installed" || model.state === "error") && (
         <>
           <Text style={s.muted}>
             Install Muse once and OpenMuse can use it offline for private conversations and learning.
@@ -391,10 +395,25 @@ function MuseModelControls() {
         </Button>
       )}
 
-      {model.state === "installed" && (
-        <Button primary busy={busy} onPress={() => void act(() => edgeModelManager.load("muse"))}>
-          Start Muse
-        </Button>
+      {model.state === "installed" && model.localUri && (
+        <>
+          <View
+            style={{
+              padding: 13,
+              borderRadius: 16,
+              backgroundColor: "#F7F9FC",
+              gap: 3,
+            }}
+          >
+            <Text style={[s.heading, { fontSize: 14 }]}>Muse is downloaded</Text>
+            <Text style={s.small}>
+              The model is stored on this phone and will be reused when you update OpenMuse.
+            </Text>
+          </View>
+          <Button primary busy={busy} onPress={() => void act(() => edgeModelManager.load("muse"))}>
+            {model.error ? "Retry Muse" : "Start Muse"}
+          </Button>
+        </>
       )}
 
       {model.state === "loaded" && (
@@ -452,7 +471,13 @@ function MuseModelControls() {
         </View>
       )}
 
-      <ErrorNotice error={error || model.error} />
+      <ErrorNotice
+        error={
+          (error || model.error)?.includes("Unable to initialize LiteRT-LM")
+            ? "Muse is downloaded, but its local AI engine could not start. The model file was kept on this phone; retry without downloading it again."
+            : error || model.error
+        }
+      />
     </Card>
   );
 }
