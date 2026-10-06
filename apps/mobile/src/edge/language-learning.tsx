@@ -1,18 +1,25 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { SendHorizontal } from "lucide-react-native";
 import { Pressable, Text, View } from "react-native";
 import { Button, Card, Chip, ErrorNotice, Field, colors, s } from "../ui";
-import { askMuse, type LocalTurn } from "./local-assistant";
+import type { LocalTurn } from "./local-assistant";
 import {
-  loadLanguageProgress,
-  saveLanguageProgress,
-  type LanguageProgress,
-} from "./local-history";
+  loadLanguageAgentProfile,
+  runLanguageAgent,
+  type LanguageLearnerProfile,
+  type LanguagePracticeMode,
+} from "./language-agent";
+import type { AgentHandoff } from "./agent-protocol";
 import { useEdgeModel } from "./use-model-manager";
 
 const LANGUAGES = ["French", "Spanish", "Italian", "German"] as const;
 const LEVELS = ["Beginner", "Intermediate", "Advanced"] as const;
-const MODES = ["Conversation", "Correction", "Vocabulary", "Travel role-play"] as const;
+const MODES: readonly LanguagePracticeMode[] = [
+  "Conversation",
+  "Correction",
+  "Vocabulary",
+  "Travel role-play",
+];
 
 function Choice({
   label,
@@ -42,67 +49,34 @@ function Choice({
   );
 }
 
-function instruction(language: string, level: string, mode: string) {
-  const base = [
-    `You are an excellent ${language} language tutor.`,
-    `The learner is at ${level.toLowerCase()} level.`,
-    "Keep the lesson conversational and confidence-building.",
-    "Correct mistakes clearly without overloading the learner.",
-    "Use short chunks and ask only one main question at a time.",
-  ];
-
-  if (mode === "Correction") {
-    base.push(
-      "Focus on correcting what the learner writes.",
-      "Give: corrected sentence, one short explanation, and one more natural alternative.",
-    );
-  } else if (mode === "Vocabulary") {
-    base.push(
-      "Teach useful everyday vocabulary in context.",
-      "Introduce at most five new items at once and then quiz the learner.",
-    );
-  } else if (mode === "Travel role-play") {
-    base.push(
-      "Run a realistic travel role-play such as a cafe, hotel, train station, airport, or shop.",
-      "Stay in character, but provide a brief English hint when the learner is stuck.",
-    );
-  } else {
-    base.push(
-      `Prefer ${language} for the conversation, with concise English explanations when necessary.`,
-      "Gently correct important errors after responding naturally.",
-    );
-  }
-
-  return base.join(" ");
-}
-
 export function LanguageLearning() {
   const muse = useEdgeModel("muse");
   const [language, setLanguage] = useState<string>("French");
   const [level, setLevel] = useState<string>("Beginner");
   const [mode, setMode] = useState<string>("Conversation");
-  const [progress, setProgress] = useState<LanguageProgress>({
+  const [profile, setProfile] = useState<LanguageLearnerProfile>({
     language: "French",
     level: "Beginner",
-    practiceTurns: 0,
+    totalTurns: 0,
+    goals: ["Hold practical everyday conversations"],
+    weakPoints: [],
+    vocabulary: [],
+    recentCorrections: [],
   });
+  const [handoffs, setHandoffs] = useState<AgentHandoff[]>([]);
   const [turns, setTurns] = useState<LocalTurn[]>([]);
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
   useEffect(() => {
-    void loadLanguageProgress().then((saved) => {
-      setProgress(saved);
+    void loadLanguageAgentProfile().then((saved) => {
+      setProfile(saved);
       setLanguage(saved.language || "French");
       setLevel(saved.level || "Beginner");
     });
   }, []);
 
-  const tutorInstruction = useMemo(
-    () => instruction(language, level, mode),
-    [language, level, mode],
-  );
 
   async function practice(textOverride?: string) {
     const text = (textOverride ?? input).trim();
@@ -116,18 +90,17 @@ export function LanguageLearning() {
     setError("");
 
     try {
-      const response = await askMuse(tutorInstruction, before, text);
-      const completed: LocalTurn[] = [...withUser, { role: "assistant", text: response }];
-      setTurns(completed);
-
-      const nextProgress: LanguageProgress = {
+      const response = await runLanguageAgent({
         language,
         level,
-        practiceTurns: progress.practiceTurns + 1,
-        lastPracticedAt: new Date().toISOString(),
-      };
-      setProgress(nextProgress);
-      await saveLanguageProgress(nextProgress);
+        mode: mode as LanguagePracticeMode,
+        userText: text,
+        history: before,
+      });
+      const completed: LocalTurn[] = [...withUser, { role: "assistant", text: response.text }];
+      setTurns(completed);
+      setProfile(response.profile);
+      setHandoffs(response.handoffs);
     } catch (value) {
       setError(value instanceof Error ? value.message : String(value));
     } finally {
@@ -139,6 +112,7 @@ export function LanguageLearning() {
     setTurns([]);
     setInput("");
     setError("");
+    setHandoffs([]);
   }
 
   return (
@@ -148,7 +122,7 @@ export function LanguageLearning() {
           <Text style={s.heading}>Language Coach</Text>
           <Text style={s.small}>Local conversational practice powered by Muse.</Text>
         </View>
-        <Chip tint={colors.lavender}>{progress.practiceTurns} practice turns</Chip>
+        <Chip tint={colors.lavender}>{profile.totalTurns} practice turns</Chip>
       </View>
 
       <View style={{ gap: 8 }}>
@@ -176,6 +150,33 @@ export function LanguageLearning() {
           ))}
         </View>
       </View>
+
+      <Card
+        style={{
+          padding: 14,
+          gap: 10,
+          backgroundColor: "#F8FAFC",
+          borderRadius: 20,
+        }}
+      >
+        <View style={s.between}>
+          <View>
+            <Text style={[s.heading, { fontSize: 15 }]}>Learning memory</Text>
+            <Text style={s.small}>The Language Agent carries this across sessions.</Text>
+          </View>
+          <Chip tint={colors.green}>persistent</Chip>
+        </View>
+        <View style={[s.row, { gap: 7, flexWrap: "wrap" }]}>
+          <Chip>{profile.weakPoints.length} weak points</Chip>
+          <Chip>{profile.vocabulary.length} vocabulary items</Chip>
+          <Chip>{profile.recentCorrections.length} corrections</Chip>
+        </View>
+        {profile.weakPoints.length > 0 && (
+          <Text style={s.small}>
+            Current focus: {profile.weakPoints.slice(0, 3).join(" · ")}
+          </Text>
+        )}
+      </Card>
 
       <View style={{ gap: 8 }}>
         <Text style={s.label}>Practice mode</Text>
@@ -254,6 +255,32 @@ export function LanguageLearning() {
               </Text>
             </View>
           ))}
+        </View>
+      )}
+
+      {handoffs.length > 0 && (
+        <View style={{ gap: 7 }}>
+          <Text style={s.label}>Agent activity</Text>
+          <View style={[s.row, { gap: 7, flexWrap: "wrap" }]}>
+            {handoffs.map((handoff, index) => (
+              <Chip
+                key={`${handoff.to}-${handoff.taskKind}-${index}`}
+                tint={
+                  handoff.to === "scout"
+                    ? colors.green
+                    : handoff.to === "sage"
+                      ? colors.lavender
+                      : colors.sky
+                }
+              >
+                {handoff.to === "scout"
+                  ? "Scout evaluated"
+                  : handoff.to === "sage"
+                    ? "Sage explained"
+                    : "Muse coached"}
+              </Chip>
+            ))}
+          </View>
         </View>
       )}
 
