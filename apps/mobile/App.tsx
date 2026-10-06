@@ -41,6 +41,7 @@ import { BrowserScreen, CalendarScreen, FilesScreen, MailScreen } from "./src/sc
 import { ThreadsProvider, ThreadsSheet, useMuseThread } from "./src/threads";
 import { Button, Card, colors, ErrorNotice, Field, IconButton, Mascot, s } from "./src/ui";
 import { type Detail, useWorkspace, WorkspaceContext } from "./src/workspace";
+import { DeviceAiCard } from "./src/edge/device-ai";
 
 const nav: { id: Section; label: string; icon: LucideIcon }[] = [
   { id: "chat", label: "Chat", icon: MessageCircle },
@@ -71,6 +72,7 @@ export default function App() {
   const [accessKey, setAccessKey] = useState("");
   const [busy, setBusy] = useState(true);
   const [error, setError] = useState("");
+  const [deviceAiOpen, setDeviceAiOpen] = useState(false);
   const connect = useCallback(async (key?: string) => {
     setBusy(true);
     setError("");
@@ -97,45 +99,51 @@ export default function App() {
           <WorkspaceApp token={token} />
         </CopilotKitProvider>
       ) : (
-        <SafeAreaView
-          style={{
-            flex: 1,
-            backgroundColor: colors.canvas,
-            justifyContent: "center",
-            alignItems: "center",
-            padding: 24,
-          }}
-        >
-          <View style={{ width: "100%", maxWidth: 420, gap: 22, alignItems: "center" }}>
-            <Mascot size={72} />
-            <Text
-              style={{ fontSize: 32, color: colors.text, letterSpacing: -1, fontWeight: "500" }}
-            >
-              Welcome to OpenMuse.
-            </Text>
-            <Text style={[s.muted, { textAlign: "center" }]}>A little room for your day.</Text>
-            {busy ? (
-              <ActivityIndicator color={colors.blueDark} />
-            ) : (
-              <Card style={{ width: "100%" }}>
-                <ErrorNotice error={error} />
-                <Field
-                  label="Workspace access key"
-                  value={accessKey}
-                  onChangeText={setAccessKey}
-                  secureTextEntry
-                  placeholder="Required for a live workspace"
-                />
-                <Button primary onPress={() => void connect(accessKey || undefined)}>
-                  Open workspace
-                </Button>
-                <Text style={[s.small, { marginTop: 15 }]}>
-                  Local workspaces open without a key. Make sure your OpenMuse server is running at{" "}
-                  {API_URL}.
-                </Text>
-              </Card>
-            )}
-          </View>
+        <SafeAreaView style={{ flex: 1, backgroundColor: colors.canvas }}>
+          <ScrollView
+            keyboardShouldPersistTaps="handled"
+            contentContainerStyle={{
+              flexGrow: 1,
+              justifyContent: deviceAiOpen ? "flex-start" : "center",
+              alignItems: "center",
+              padding: 24,
+            }}
+          >
+            <View style={{ width: "100%", maxWidth: 520, gap: 22, alignItems: "center" }}>
+              <Mascot size={72} />
+              <Text
+                style={{ fontSize: 32, color: colors.text, letterSpacing: -1, fontWeight: "500" }}
+              >
+                Welcome to OpenMuse.
+              </Text>
+              <Text style={[s.muted, { textAlign: "center" }]}>A little room for your day.</Text>
+              {busy ? (
+                <ActivityIndicator color={colors.blueDark} />
+              ) : (
+                <Card style={{ width: "100%", gap: 12 }}>
+                  <ErrorNotice error={error} />
+                  <Field
+                    label="Workspace access key"
+                    value={accessKey}
+                    onChangeText={setAccessKey}
+                    secureTextEntry
+                    placeholder="Required for a live workspace"
+                  />
+                  <Button primary onPress={() => void connect(accessKey || undefined)}>
+                    Open workspace
+                  </Button>
+                  <Button onPress={() => setDeviceAiOpen((value) => !value)}>
+                    {deviceAiOpen ? "Hide Device AI" : "Open Device AI"}
+                  </Button>
+                  <Text style={s.small}>
+                    Device AI works locally without a workspace connection. Remote workspace
+                    features still use {API_URL}.
+                  </Text>
+                </Card>
+              )}
+              {deviceAiOpen && <DeviceAiCard />}
+            </View>
+          </ScrollView>
         </SafeAreaView>
       )}
     </SafeAreaProvider>
