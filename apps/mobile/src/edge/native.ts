@@ -10,6 +10,23 @@ export type EdgeRuntimeStats = {
 export type EdgeTokenEvent = { text: string };
 export type EdgeErrorEvent = { message: string };
 
+export type EdgeNotificationEvent = {
+  id: string;
+  packageName: string;
+  postedAt: number;
+  title?: string | null;
+  text?: string | null;
+  subText?: string | null;
+  category?: string | null;
+  channelId?: string | null;
+  isOngoing: boolean;
+  isGroupSummary: boolean;
+  importance?: number | null;
+  actionRequired?: boolean | null;
+  triageReason?: string | null;
+  triagedAt?: number | null;
+};
+
 type OpenMuseEdgeEvents = {
   onGenerationToken(event: EdgeTokenEvent): void;
   onGenerationComplete(event: EdgeTokenEvent): void;
@@ -24,6 +41,16 @@ declare class OpenMuseEdgeNativeModule extends NativeModule<OpenMuseEdgeEvents> 
   streamGenerate(prompt: string): Promise<string>;
   cancelGeneration(): boolean;
   sha256File(filePath: string): Promise<string>;
+  hasNotificationAccess(): boolean;
+  openNotificationAccessSettings(): boolean;
+  getRecentNotificationEvents(limit: number): EdgeNotificationEvent[];
+  clearNotificationEvents(): boolean;
+  updateNotificationTriage(
+    id: string,
+    importance: number,
+    actionRequired: boolean,
+    reason: string,
+  ): boolean;
 }
 
 let cached: OpenMuseEdgeNativeModule | null | undefined;
@@ -85,6 +112,35 @@ export const OpenMuseEdge = {
     const module = nativeModule();
     if (!module) throw new Error("OpenMuseEdge native module is unavailable in this build.");
     return module.sha256File(filePath);
+  },
+
+  hasNotificationAccess() {
+    return nativeModule()?.hasNotificationAccess() ?? false;
+  },
+
+  openNotificationAccessSettings() {
+    const module = nativeModule();
+    if (!module) throw new Error("OpenMuseEdge native module is unavailable in this build.");
+    return module.openNotificationAccessSettings();
+  },
+
+  getRecentNotificationEvents(limit = 50): EdgeNotificationEvent[] {
+    return nativeModule()?.getRecentNotificationEvents(limit) ?? [];
+  },
+
+  clearNotificationEvents() {
+    return nativeModule()?.clearNotificationEvents() ?? false;
+  },
+
+  updateNotificationTriage(
+    id: string,
+    importance: number,
+    actionRequired: boolean,
+    reason: string,
+  ) {
+    return (
+      nativeModule()?.updateNotificationTriage(id, importance, actionRequired, reason) ?? false
+    );
   },
 
   addTokenListener(listener: (event: EdgeTokenEvent) => void) {
