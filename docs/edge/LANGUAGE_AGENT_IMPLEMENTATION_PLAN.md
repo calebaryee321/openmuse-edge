@@ -420,3 +420,21 @@ Language Agent v1 is production-ready when:
 - no raw runtime errors reach user
 - 30-turn device soak has no crash or unbounded memory growth
 - AAR is generated and next mission is recommended
+
+
+## Public research basis
+
+The product direction above is based only on publicly available educational material, not classified or operational training.
+
+- Defense Language Institute Foreign Language Center — About:
+  https://www.dliflc.edu/about/
+- DLIFLC Applied Language Learning — AI-Assisted Learning / recurring learner patterns, adaptive exercises, conversational tutoring and spaced review:
+  https://www.dliflc.edu/ojs/ALL/article/view/69
+- CIA — Intelligence Language Institute:
+  https://www.cia.gov/careers/language-opportunities/intelligence-language-institute/
+- CIA — Language Empowers Mission: Intelligence Language Institute:
+  https://www.cia.gov/stories/story/language-empowers-mission/
+
+Implementation interpretation:
+- "mission" in OpenMuse means a practical learner objective, not an intelligence operation.
+- "ILR-inspired" progress is descriptive only and is not an official government proficiency rating.
