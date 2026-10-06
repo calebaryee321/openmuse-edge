@@ -7,6 +7,7 @@ on:
     paths:
       - "apps/mobile/modules/openmuse-edge/**"
       - "apps/mobile/src/edge/**"
+      - "apps/mobile/App.tsx"
       - "apps/mobile/app.json"
       - ".github/workflows/android-installed-smoke.yml"
   workflow_dispatch:
