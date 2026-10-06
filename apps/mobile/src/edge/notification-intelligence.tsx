@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { BellRing, ShieldCheck, Sparkles } from "lucide-react-native";
 import { AppState, Text, View } from "react-native";
 import { Button, Card, Chip, colors, ErrorNotice, s } from "../ui";
 import { formatBytes } from "./format";
@@ -13,7 +14,35 @@ function appLabel(packageName: string) {
 }
 
 function scoreLabel(score?: number | null) {
-  return score == null ? "untriaged" : `${Math.round(score * 100)}%`;
+  return score == null ? "new" : `${Math.round(score * 100)}%`;
+}
+
+function Stat({
+  value,
+  label,
+  tint,
+}: {
+  value: string | number;
+  label: string;
+  tint: string;
+}) {
+  return (
+    <View
+      style={{
+        flex: 1,
+        minWidth: 92,
+        padding: 13,
+        borderRadius: 18,
+        backgroundColor: tint,
+        gap: 3,
+      }}
+    >
+      <Text style={{ color: colors.text, fontSize: 20, fontWeight: "700", letterSpacing: -0.6 }}>
+        {value}
+      </Text>
+      <Text style={s.small}>{label}</Text>
+    </View>
+  );
 }
 
 export function NotificationIntelligenceCard() {
@@ -54,25 +83,57 @@ export function NotificationIntelligenceCard() {
   const actionable = events.filter((event) => event.actionRequired).length;
 
   return (
-    <Card style={{ gap: 14, backgroundColor: colors.card }}>
-      <View style={s.between}>
-        <View style={{ flex: 1, gap: 3 }}>
-          <Text style={s.heading}>Notification intelligence</Text>
-          <Text style={s.small}>
-            Local event capture with deterministic pre-triage and optional Qwen Scout refinement.
-          </Text>
+    <Card
+      style={{
+        gap: 16,
+        padding: 18,
+        borderWidth: 1,
+        borderColor: "#ECEEF1",
+        backgroundColor: "#FFFFFF",
+      }}
+    >
+      <View style={[s.between, { gap: 12 }]}>
+        <View style={[s.row, { gap: 11, flex: 1 }]}>
+          <View
+            style={{
+              width: 42,
+              height: 42,
+              borderRadius: 15,
+              backgroundColor: "#FFF3E7",
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            <BellRing size={19} color={colors.text} />
+          </View>
+          <View style={{ flex: 1, gap: 2 }}>
+            <Text style={[s.heading, { fontSize: 18 }]}>Smart notifications</Text>
+            <Text style={s.small}>Let Scout surface what actually needs your attention.</Text>
+          </View>
         </View>
         <Chip tint={access ? colors.green : colors.orange}>
-          {access ? "Access on" : "Access off"}
+          {access ? "On" : "Off"}
         </Chip>
       </View>
 
       {!access ? (
-        <>
-          <Text style={s.muted}>
-            Android requires you to explicitly allow OpenMuse to read notifications. You can revoke
-            this at any time in system settings.
-          </Text>
+        <View style={{ gap: 13 }}>
+          <View
+            style={{
+              padding: 14,
+              borderRadius: 18,
+              backgroundColor: "#F8FAFC",
+              flexDirection: "row",
+              gap: 10,
+              alignItems: "flex-start",
+            }}
+          >
+            <ShieldCheck size={18} color={colors.text} />
+            <Text style={[s.muted, { flex: 1 }]}>
+              OpenMuse only reads notifications after you explicitly allow it in Android settings.
+              You can turn access off at any time.
+            </Text>
+          </View>
           <Button
             primary
             onPress={() => {
@@ -83,57 +144,89 @@ export function NotificationIntelligenceCard() {
               }
             }}
           >
-            Grant notification access
+            Set up notification access
           </Button>
-        </>
+        </View>
       ) : (
         <>
-          <View style={[s.row, { gap: 8, flexWrap: "wrap" }]}>
-            <Chip>{events.length} recent</Chip>
-            <Chip tint={important ? colors.orange : undefined}>{important} important</Chip>
-            <Chip tint={actionable ? colors.lavender : undefined}>{actionable} actionable</Chip>
+          <View style={{ flexDirection: "row", gap: 9, flexWrap: "wrap" }}>
+            <Stat value={events.length} label="recent" tint="#F3F4F6" />
+            <Stat value={important} label="important" tint="#FFF3E7" />
+            <Stat value={actionable} label="actionable" tint="#F0ECFF" />
           </View>
-          <Button small onPress={refresh}>
-            Refresh events
-          </Button>
+
+          {events.length === 0 ? (
+            <View
+              style={{
+                padding: 16,
+                borderRadius: 18,
+                backgroundColor: "#F8FAFC",
+                gap: 4,
+              }}
+            >
+              <Text style={[s.heading, { fontSize: 14 }]}>You're connected</Text>
+              <Text style={s.small}>
+                New notifications will appear here as OpenMuse sees them.
+              </Text>
+            </View>
+          ) : (
+            <View style={{ gap: 8 }}>
+              {events.slice(0, 4).map((event) => (
+                <View
+                  key={event.id}
+                  style={{
+                    gap: 4,
+                    padding: 13,
+                    borderRadius: 17,
+                    backgroundColor: "#F8FAFC",
+                  }}
+                >
+                  <View style={s.between}>
+                    <Text
+                      numberOfLines={1}
+                      style={[s.small, { color: colors.text, fontWeight: "700", flex: 1 }]}
+                    >
+                      {event.title || appLabel(event.packageName)}
+                    </Text>
+                    <Chip tint={(event.importance ?? 0) >= 0.72 ? colors.orange : undefined}>
+                      {scoreLabel(event.importance)}
+                    </Chip>
+                  </View>
+                  {!!event.text && (
+                    <Text numberOfLines={2} style={s.small}>
+                      {event.text}
+                    </Text>
+                  )}
+                  <Text style={s.small}>
+                    {appLabel(event.packageName)}
+                    {event.actionRequired ? " · may need action" : ""}
+                  </Text>
+                </View>
+              ))}
+            </View>
+          )}
         </>
       )}
 
-      <View style={{ gap: 10 }}>
-        {events.slice(0, 6).map((event) => (
-          <View
-            key={event.id}
-            style={{ gap: 3, paddingBottom: 10, borderBottomWidth: 1, borderBottomColor: colors.line }}
-          >
-            <View style={s.between}>
-              <Text numberOfLines={1} style={[s.small, { color: colors.text, fontWeight: "600", flex: 1 }]}>
-                {event.title || appLabel(event.packageName)}
-              </Text>
-              <Chip tint={(event.importance ?? 0) >= 0.72 ? colors.orange : undefined}>
-                {scoreLabel(event.importance)}
-              </Chip>
-            </View>
-            {!!event.text && (
-              <Text numberOfLines={2} style={s.small}>
-                {event.text}
-              </Text>
-            )}
-            <Text style={s.small}>
-              {appLabel(event.packageName)}
-              {event.actionRequired ? " · action likely" : ""}
-              {event.triageReason ? ` · ${event.triageReason}` : ""}
-            </Text>
-          </View>
-        ))}
-      </View>
-
-      <View style={{ gap: 8, paddingTop: 4 }}>
+      <View
+        style={{
+          padding: 14,
+          borderRadius: 19,
+          backgroundColor: "#F4F7FB",
+          gap: 10,
+        }}
+      >
         <View style={s.between}>
-          <View style={{ flex: 1 }}>
-            <Text style={s.heading}>Scout</Text>
-            <Text style={s.small}>Qwen3.5 0.8B · local structured triage</Text>
+          <View style={[s.row, { gap: 9, flex: 1 }]}>
+            <Sparkles size={17} color={colors.text} />
+            <View style={{ flex: 1 }}>
+              <Text style={[s.heading, { fontSize: 15 }]}>Scout</Text>
+              <Text style={s.small}>Fast, local notification triage.</Text>
+            </View>
           </View>
-          <Chip>{scout.state.replace(/-/g, " ")}</Chip>
+          <Chip tint={["installed", "loaded"].includes(scout.state) ? colors.green : undefined}>
+            {scout.state.replace(/-/g, " ")}
+          </Chip>
         </View>
 
         {scout.state === "downloading" && (
@@ -149,11 +242,11 @@ export function NotificationIntelligenceCard() {
             onPress={() =>
               void act(async () => {
                 await edgeModelManager.install("scout");
-                setStatus("Scout downloaded.");
+                setStatus("Scout is ready.");
               })
             }
           >
-            Download Scout (~0.96 GB)
+            Install Scout · ~1 GB
           </Button>
         )}
 
@@ -167,12 +260,13 @@ export function NotificationIntelligenceCard() {
               })
             }
           >
-            Pause Scout download
+            Pause download
           </Button>
         )}
 
         {scout.state === "paused" && (
           <Button
+            primary
             busy={busy}
             onPress={() =>
               void act(async () => {
@@ -181,7 +275,7 @@ export function NotificationIntelligenceCard() {
               })
             }
           >
-            Resume Scout download
+            Resume download
           </Button>
         )}
 
@@ -192,11 +286,13 @@ export function NotificationIntelligenceCard() {
             onPress={() =>
               void act(async () => {
                 const result = await runScoutNotificationPass(8);
-                setStatus(`Scout refined ${result.processed} notification${result.processed === 1 ? "" : "s"}.`);
+                setStatus(
+                  `Scout reviewed ${result.processed} notification${result.processed === 1 ? "" : "s"}.`,
+                );
               })
             }
           >
-            Run Scout on recent notifications
+            Review recent notifications
           </Button>
         )}
 
@@ -204,24 +300,24 @@ export function NotificationIntelligenceCard() {
       </View>
 
       {access && events.length > 0 && (
-        <Button
-          small
-          danger
-          onPress={() => {
-            OpenMuseEdge.clearNotificationEvents();
-            refresh();
-          }}
-        >
-          Clear local notification history
-        </Button>
+        <View style={[s.row, { gap: 8, flexWrap: "wrap" }]}>
+          <Button small onPress={refresh}>
+            Refresh
+          </Button>
+          <Button
+            small
+            danger
+            onPress={() => {
+              OpenMuseEdge.clearNotificationEvents();
+              refresh();
+            }}
+          >
+            Clear history
+          </Button>
+        </View>
       )}
 
       <ErrorNotice error={error || scout.error} />
-      <Text style={s.small}>
-        Raw notification events remain on-device in a bounded local queue. The current background
-        worker performs cheap deterministic pre-triage; Scout refinement uses the local Qwen model
-        when you run it.
-      </Text>
     </Card>
   );
 }
