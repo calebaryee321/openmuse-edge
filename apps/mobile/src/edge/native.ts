@@ -23,6 +23,7 @@ declare class OpenMuseEdgeNativeModule extends NativeModule<OpenMuseEdgeEvents> 
   generate(prompt: string): Promise<string>;
   streamGenerate(prompt: string): Promise<string>;
   cancelGeneration(): boolean;
+  sha256File(filePath: string): Promise<string>;
 }
 
 let cached: OpenMuseEdgeNativeModule | null | undefined;
@@ -78,6 +79,12 @@ export const OpenMuseEdge = {
 
   cancelGeneration() {
     return nativeModule()?.cancelGeneration() ?? false;
+  },
+
+  async sha256File(filePath: string) {
+    const module = nativeModule();
+    if (!module) throw new Error("OpenMuseEdge native module is unavailable in this build.");
+    return module.sha256File(filePath);
   },
 
   addTokenListener(listener: (event: EdgeTokenEvent) => void) {
