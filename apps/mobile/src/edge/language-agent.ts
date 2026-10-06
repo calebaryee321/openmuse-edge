@@ -16,7 +16,6 @@ import {
   type LanguageTurnAnalysis,
 } from "./language-analysis";
 import {
-  DEFAULT_SKILL_BANDS,
   createReviewItem,
   normalizeErrorKey,
   recordErrorPattern,
@@ -24,7 +23,6 @@ import {
   shouldRunScoutEvaluation,
   type ErrorPattern,
   type ReviewItem,
-  type SkillBands,
 } from "./language-training";
 
 const ROOT = `${FileSystem.documentDirectory}openmuse-edge/language-agent/`;
