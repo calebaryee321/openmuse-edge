@@ -112,7 +112,8 @@ Permission / policy broker
 - [x] Define agent roles and central tool broker.
 - [x] Create bootstrap code + resource manifest.
 - [x] Fork OpenMuse into user GitHub and create feature branch.
-- [ ] Apply bootstrap overlay and open first draft PR.
+- [x] Add first mobile Edge scaffold: model registry, routing policy, Device AI Apps card, and model manifest.
+- [ ] Apply remaining native LiteRT bootstrap and open first draft PR.
 
 Exit criterion: repo exists in user account with additive scaffold and green TypeScript checks.
 
