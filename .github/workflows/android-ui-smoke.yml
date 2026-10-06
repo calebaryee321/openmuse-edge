@@ -84,27 +84,33 @@ jobs:
             adb install -r "${{ steps.apk.outputs.path }}"
 
             adb logcat -c
-            adb shell monkey -p app.openmuse.mobile -c android.intent.category.LAUNCHER 1
-            sleep 25
+            adb shell am start -W -n app.openmuse.mobile/.MainActivity               > "$RUNNER_TEMP/android-ui-smoke/launch.txt" 2>&1 || true
+            sleep 15
 
-            PID="$(adb shell pidof app.openmuse.mobile | tr -d '\r')"
-            test -n "$PID"
-            echo "OpenMuse PID: $PID"
+            adb logcat -d > "$RUNNER_TEMP/android-ui-smoke/logcat.txt" || true
+            adb shell dumpsys activity activities > "$RUNNER_TEMP/android-ui-smoke/activity.txt" || true
+            adb shell dumpsys package app.openmuse.mobile > "$RUNNER_TEMP/android-ui-smoke/package.txt" || true
+            adb exec-out screencap -p > "$RUNNER_TEMP/android-ui-smoke/openmuse-screen.png" || true
+            adb shell uiautomator dump /sdcard/openmuse-ui.xml || true
+            adb pull /sdcard/openmuse-ui.xml "$RUNNER_TEMP/android-ui-smoke/openmuse-ui.xml" || true
 
-            adb shell uiautomator dump /sdcard/openmuse-ui.xml
-            adb pull /sdcard/openmuse-ui.xml "$RUNNER_TEMP/android-ui-smoke/openmuse-ui.xml"
-            adb exec-out screencap -p > "$RUNNER_TEMP/android-ui-smoke/openmuse-screen.png"
-            adb logcat -d > "$RUNNER_TEMP/android-ui-smoke/logcat.txt"
-            adb shell dumpsys activity activities > "$RUNNER_TEMP/android-ui-smoke/activity.txt"
+            PID="$(adb shell pidof app.openmuse.mobile 2>/dev/null | tr -d '\r' || true)"
+            echo "OpenMuse PID: $PID" | tee "$RUNNER_TEMP/android-ui-smoke/pid.txt"
 
             test -s "$RUNNER_TEMP/android-ui-smoke/openmuse-screen.png"
-            test -s "$RUNNER_TEMP/android-ui-smoke/openmuse-ui.xml"
-
-            grep -Eq 'Welcome to OpenMuse|Open workspace|A little room for your day'               "$RUNNER_TEMP/android-ui-smoke/openmuse-ui.xml"
 
             if grep -E 'FATAL EXCEPTION:|AndroidRuntime:.*Process: app\.openmuse\.mobile'               "$RUNNER_TEMP/android-ui-smoke/logcat.txt"; then
+              echo "OpenMuse emitted a fatal Android exception."
               exit 1
             fi
+
+            if [ -z "$PID" ]; then
+              echo "OpenMuse process exited after launch."
+              exit 1
+            fi
+
+            test -s "$RUNNER_TEMP/android-ui-smoke/openmuse-ui.xml"
+            grep -Eq 'Welcome to OpenMuse|Open workspace|A little room for your day'               "$RUNNER_TEMP/android-ui-smoke/openmuse-ui.xml"
 
       - name: Upload rendered UI artifacts
         if: always()
