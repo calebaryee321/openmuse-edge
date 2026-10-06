@@ -1,0 +1,41 @@
+name: Refresh pnpm lockfile
+
+on:
+  push:
+    branches:
+      - feature/openmuse-edge-v0
+    paths:
+      - "apps/mobile/package.json"
+
+permissions:
+  contents: write
+
+jobs:
+  lockfile:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/openmuse-edge-v0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - uses: pnpm/action-setup@v4
+
+      - name: Refresh lockfile only
+        run: pnpm install --lockfile-only --no-frozen-lockfile
+
+      - name: Commit lockfile
+        run: |
+          if git diff --quiet -- pnpm-lock.yaml; then
+            echo "Lockfile already current."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add pnpm-lock.yaml
+          git commit -m "chore(edge): refresh lockfile for Kotlin build properties"
+          git push origin HEAD:feature/openmuse-edge-v0
