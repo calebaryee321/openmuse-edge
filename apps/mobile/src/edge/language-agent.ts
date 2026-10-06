@@ -6,6 +6,16 @@ import { isAgentAvailable } from "./agent-runtime";
 import type { LocalTurn } from "./local-assistant";
 import type { LanguageMission } from "./language-missions";
 import {
+  createEmptyLanguageProfile,
+  migrateLanguageProfile,
+  startsNewLanguageSession,
+  type LanguageLearnerProfile,
+} from "./language-profile";
+import {
+  parseLanguageTurnAnalysis,
+  type LanguageTurnAnalysis,
+} from "./language-analysis";
+import {
   DEFAULT_SKILL_BANDS,
   createReviewItem,
   normalizeErrorKey,
@@ -19,41 +29,14 @@ import {
 
 const ROOT = `${FileSystem.documentDirectory}openmuse-edge/language-agent/`;
 const PROFILE_FILE = `${ROOT}profile.json`;
-const PROFILE_SCHEMA_VERSION = 2;
-const SESSION_GAP_MS = 2 * 60 * 60 * 1000;
-
 export type LanguagePracticeMode =
   | "Conversation"
   | "Correction"
   | "Vocabulary"
   | "Travel role-play";
 
-export type LanguageLearnerProfile = {
-  schemaVersion: 2;
-  language: string;
-  level: string;
-  totalTurns: number;
-  totalSessions: number;
-  goals: string[];
-  weakPoints: string[];
-  vocabulary: string[];
-  recentCorrections: string[];
-  skillBands: SkillBands;
-  errorPatterns: ErrorPattern[];
-  reviewQueue: ReviewItem[];
-  completedMissions: string[];
-  lastPracticedAt?: string;
-  lastAssessmentAt?: string;
-};
 
-export type LanguageTurnAnalysis = {
-  corrected?: string;
-  errors: string[];
-  vocabulary: string[];
-  focus?: string;
-  confidence: number;
-  needsDeepExplanation: boolean;
-};
+export type { LanguageLearnerProfile } from "./language-profile";
 
 export type LanguageAgentReply = {
   text: string;
@@ -62,60 +45,18 @@ export type LanguageAgentReply = {
   handoffs: AgentHandoff[];
 };
 
-const EMPTY_PROFILE: LanguageLearnerProfile = {
-  schemaVersion: PROFILE_SCHEMA_VERSION,
-  language: "French",
-  level: "Beginner",
-  totalTurns: 0,
-  totalSessions: 0,
-  goals: ["Hold practical everyday conversations"],
-  weakPoints: [],
-  vocabulary: [],
-  recentCorrections: [],
-  skillBands: { ...DEFAULT_SKILL_BANDS },
-  errorPatterns: [],
-  reviewQueue: [],
-  completedMissions: [],
-};
-
 async function ensureRoot() {
   await FileSystem.makeDirectoryAsync(ROOT, { intermediates: true });
-}
-
-function migrateProfile(value: unknown): LanguageLearnerProfile {
-  const parsed =
-    value && typeof value === "object" ? (value as Partial<LanguageLearnerProfile>) : {};
-
-  return {
-    ...EMPTY_PROFILE,
-    ...parsed,
-    schemaVersion: PROFILE_SCHEMA_VERSION,
-    goals: Array.isArray(parsed.goals) ? parsed.goals : EMPTY_PROFILE.goals,
-    weakPoints: Array.isArray(parsed.weakPoints) ? parsed.weakPoints : [],
-    vocabulary: Array.isArray(parsed.vocabulary) ? parsed.vocabulary : [],
-    recentCorrections: Array.isArray(parsed.recentCorrections) ? parsed.recentCorrections : [],
-    skillBands: {
-      ...DEFAULT_SKILL_BANDS,
-      ...(parsed.skillBands ?? {}),
-    },
-    errorPatterns: Array.isArray(parsed.errorPatterns) ? parsed.errorPatterns : [],
-    reviewQueue: Array.isArray(parsed.reviewQueue) ? parsed.reviewQueue : [],
-    completedMissions: Array.isArray(parsed.completedMissions) ? parsed.completedMissions : [],
-    totalSessions:
-      typeof parsed.totalSessions === "number" && parsed.totalSessions >= 0
-        ? parsed.totalSessions
-        : 0,
-  };
 }
 
 export async function loadLanguageAgentProfile(): Promise<LanguageLearnerProfile> {
   try {
     const info = await FileSystem.getInfoAsync(PROFILE_FILE);
-    if (!info.exists) return { ...EMPTY_PROFILE, skillBands: { ...DEFAULT_SKILL_BANDS } };
+    if (!info.exists) return createEmptyLanguageProfile();
     const raw = JSON.parse(await FileSystem.readAsStringAsync(PROFILE_FILE));
-    return migrateProfile(raw);
+    return migrateLanguageProfile(raw);
   } catch {
-    return { ...EMPTY_PROFILE, skillBands: { ...DEFAULT_SKILL_BANDS } };
+    return createEmptyLanguageProfile();
   }
 }
 
@@ -126,38 +67,6 @@ export async function saveLanguageAgentProfile(profile: LanguageLearnerProfile) 
 
 function uniqueRecent(values: string[], incoming: string[], limit: number) {
   return [...new Set([...incoming.filter(Boolean), ...values])].slice(0, limit);
-}
-
-function extractJsonObject(value: string): Record<string, unknown> | null {
-  const start = value.indexOf("{");
-  const end = value.lastIndexOf("}");
-  if (start < 0 || end <= start) return null;
-  try {
-    return JSON.parse(value.slice(start, end + 1)) as Record<string, unknown>;
-  } catch {
-    return null;
-  }
-}
-
-function asStrings(value: unknown) {
-  return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : [];
-}
-
-function parseAnalysis(value: string): LanguageTurnAnalysis | undefined {
-  const parsed = extractJsonObject(value);
-  if (!parsed) return undefined;
-
-  return {
-    corrected: typeof parsed.corrected === "string" ? parsed.corrected : undefined,
-    errors: asStrings(parsed.errors).map((item) => item.trim()).filter(Boolean).slice(0, 4),
-    vocabulary: asStrings(parsed.vocabulary).map((item) => item.trim()).filter(Boolean).slice(0, 5),
-    focus: typeof parsed.focus === "string" ? parsed.focus.trim() : undefined,
-    confidence:
-      typeof parsed.confidence === "number"
-        ? Math.max(0, Math.min(1, parsed.confidence))
-        : 0.7,
-    needsDeepExplanation: parsed.needsDeepExplanation === true,
-  };
 }
 
 function historyText(turns: LocalTurn[]) {
@@ -207,12 +116,6 @@ function tutorInstruction(
     .join("\n");
 }
 
-function startsNewSession(lastPracticedAt?: string) {
-  if (!lastPracticedAt) return true;
-  const last = new Date(lastPracticedAt).getTime();
-  return !Number.isFinite(last) || Date.now() - last >= SESSION_GAP_MS;
-}
-
 function addReviewItemIfMissing(items: ReviewItem[], item: ReviewItem) {
   const duplicate = items.some(
     (existing) =>
@@ -240,7 +143,7 @@ export async function runLanguageAgent(args: {
   mission?: LanguageMission;
 }): Promise<LanguageAgentReply> {
   let profile = await loadLanguageAgentProfile();
-  const newSession = startsNewSession(profile.lastPracticedAt);
+  const newSession = startsNewLanguageSession(profile.lastPracticedAt);
   profile = {
     ...profile,
     language: args.language,
@@ -282,7 +185,7 @@ export async function runLanguageAgent(args: {
     try {
       const delegated = await delegateWithFallback(evaluationTask);
       handoffs.push(...delegated.trace.handoffs);
-      analysis = parseAnalysis(delegated.result.output);
+      analysis = parseLanguageTurnAnalysis(delegated.result.output);
     } catch {
       // Evaluation is optional; Muse can still teach without Scout.
     }
