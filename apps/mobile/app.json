@@ -19,6 +19,7 @@
           }
         }
       ],
+      "./plugins/with-edge-kotlin-resolution",
       "expo-document-picker",
       "@config-plugins/react-native-blob-util",
       "@config-plugins/react-native-pdf"
