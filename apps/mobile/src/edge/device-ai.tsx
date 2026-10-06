@@ -5,6 +5,7 @@ import { formatBytes } from "./format";
 import { edgeModelManager } from "./model-manager";
 import { EDGE_MODELS, EDGE_MODEL_TOTAL_GB } from "./model-registry";
 import { useEdgeModel } from "./use-model-manager";
+import { NotificationIntelligenceCard } from "./notification-intelligence";
 
 export function DeviceAiCard() {
   return (
@@ -49,6 +50,7 @@ export function DeviceAiCard() {
       </Text>
 
       <MuseModelControls />
+      <NotificationIntelligenceCard />
     </Card>
   );
 }
