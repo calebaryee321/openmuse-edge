@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { SendHorizontal, Trash2 } from "lucide-react-native";
 import { Text, View } from "react-native";
 import { Button, Card, Chip, ErrorNotice, Field, colors, s } from "../ui";
 import { askMuse, type LocalTurn } from "./local-assistant";
@@ -76,13 +77,30 @@ export function LocalChat() {
       )}
 
       {turns.length === 0 ? (
-        <Card style={{ backgroundColor: colors.sky, padding: 16, gap: 5 }}>
-          <Text style={s.heading}>Start anywhere</Text>
+        <View
+          style={{
+            backgroundColor: "#F7F9FC",
+            borderRadius: 24,
+            padding: 18,
+            gap: 7,
+          }}
+        >
+          <Text style={[s.heading, { fontSize: 18 }]}>Start anywhere</Text>
           <Text style={s.muted}>
-            Ask a question, brainstorm an idea, plan something, summarize text you paste, or just
-            talk. The first message will load Muse automatically if it is installed.
+            Ask a question, plan something, brainstorm, or paste text to work through privately.
           </Text>
-        </Card>
+          <View style={[s.row, { gap: 7, flexWrap: "wrap", marginTop: 5 }]}>
+            {["Plan my day", "Brainstorm with me", "Explain something"].map((prompt) => (
+              <Button
+                key={prompt}
+                small
+                onPress={() => setInput(prompt)}
+              >
+                {prompt}
+              </Button>
+            ))}
+          </View>
+        </View>
       ) : (
         <View style={{ gap: 9 }}>
           {turns.slice(-12).map((turn, index) => (
@@ -114,15 +132,22 @@ export function LocalChat() {
         multiline
         placeholder="Ask anything…"
         editable={!busy}
+        style={{ minHeight: 72 }}
       />
 
       <View style={[s.row, { gap: 8, flexWrap: "wrap" }]}>
-        <Button primary busy={busy} disabled={!input.trim()} onPress={() => void send()}>
-          Send locally
+        <Button
+          primary
+          icon={SendHorizontal}
+          busy={busy}
+          disabled={!input.trim()}
+          onPress={() => void send()}
+        >
+          Send
         </Button>
         {turns.length > 0 && (
-          <Button small danger disabled={busy} onPress={() => void clear()}>
-            Clear history
+          <Button small danger icon={Trash2} disabled={busy} onPress={() => void clear()}>
+            Clear
           </Button>
         )}
       </View>
