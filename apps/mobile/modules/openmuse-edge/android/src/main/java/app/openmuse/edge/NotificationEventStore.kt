@@ -31,7 +31,7 @@ object NotificationEventStore {
   private val lock = Any()
 
   private fun file(context: Context): File {
-    val directory = File(context.filesDir, DIRECTORY)
+    val directory = File(context.noBackupFilesDir, DIRECTORY)
     if (!directory.exists()) directory.mkdirs()
     return File(directory, FILE_NAME)
   }
@@ -121,7 +121,10 @@ object NotificationEventStore {
     val temp = File(source.parentFile, "$FILE_NAME.tmp")
     temp.writeText(array.toString())
     if (source.exists()) source.delete()
-    temp.renameTo(source)
+    if (!temp.renameTo(source)) {
+      source.writeText(temp.readText())
+      temp.delete()
+    }
   }
 
   private fun toJson(event: NotificationEvent): JSONObject =
