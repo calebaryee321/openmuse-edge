@@ -111,6 +111,15 @@ class OpenMuseEdgeModule : Module() {
           "Android application context is unavailable."
         }
 
+      val normalizedModelPath = modelPath.removePrefix("file://")
+      val modelFile = File(normalizedModelPath)
+      require(modelFile.exists() && modelFile.isFile) {
+        "Downloaded model file is missing: $modelPath"
+      }
+      require(modelFile.length() > 0L) {
+        "Downloaded model file is empty: $modelPath"
+      }
+
       Engine.setNativeMinLogSeverity(LogSeverity.ERROR)
 
       val requested = backend.lowercase()
@@ -123,6 +132,7 @@ class OpenMuseEdgeModule : Module() {
         }
 
       var lastError: Throwable? = null
+      val backendErrors = mutableListOf<String>()
 
       for (candidate in candidates) {
         try {
@@ -136,7 +146,7 @@ class OpenMuseEdgeModule : Module() {
           val candidateEngine =
             Engine(
               EngineConfig(
-                modelPath = modelPath,
+                modelPath = normalizedModelPath,
                 backend = runtimeBackend,
                 cacheDir = context.cacheDir.path,
               ),
@@ -151,11 +161,12 @@ class OpenMuseEdgeModule : Module() {
           return@Coroutine runtimeStats()
         } catch (error: Throwable) {
           lastError = error
+          backendErrors += "$candidate: ${error.message ?: error::class.java.simpleName}"
         }
       }
 
       throw IllegalStateException(
-        "Unable to initialize LiteRT-LM for backend '$backend'.",
+        "Unable to initialize LiteRT-LM for backend '$backend'. Tried ${candidates.joinToString(", ")}. ${backendErrors.joinToString(" | ")}",
         lastError,
       )
     }
