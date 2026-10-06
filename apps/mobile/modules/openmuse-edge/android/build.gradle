@@ -26,3 +26,12 @@ tasks.withType(org.jetbrains.kotlin.gradle.tasks.KotlinCompile).configureEach {
     freeCompilerArgs.add("-Xskip-metadata-version-check")
   }
 }
+
+
+configurations.configureEach {
+  resolutionStrategy.force(
+    "org.jetbrains.kotlin:kotlin-stdlib:2.2.20",
+    "org.jetbrains.kotlin:kotlin-stdlib-jdk7:2.2.20",
+    "org.jetbrains.kotlin:kotlin-stdlib-jdk8:2.2.20"
+  )
+}
