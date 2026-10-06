@@ -42,13 +42,13 @@ jobs:
       - name: Install JS dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Validate existing Android bundle
+      - name: Validate Android JS bundle
         run: pnpm --dir apps/mobile build:android
 
       - name: Generate native Android project
         run: pnpm --dir apps/mobile exec expo prebuild --platform android --clean --no-install
 
-      - name: Build installable development APK
+      - name: Build installable debug APK
         working-directory: apps/mobile/android
         run: ./gradlew :app:assembleDebug --stacktrace
 
@@ -61,105 +61,61 @@ jobs:
           echo "path=$APK" >> "$GITHUB_OUTPUT"
           ls -lh "$APK"
 
-      - name: Expose Android SDK command-line tools
-        shell: bash
-        run: |
-          echo "$ANDROID_SDK_ROOT/platform-tools" >> "$GITHUB_PATH"
-          echo "$ANDROID_SDK_ROOT/emulator" >> "$GITHUB_PATH"
-          SDKMANAGER="$(find "$ANDROID_SDK_ROOT/cmdline-tools" -type f -name sdkmanager | head -n 1)"
-          test -x "$SDKMANAGER"
-          echo "$(dirname "$SDKMANAGER")" >> "$GITHUB_PATH"
-          echo "sdkmanager=$SDKMANAGER"
+      - name: Boot emulator, install APK, and verify rendered UI
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          arch: x86_64
+          profile: pixel_7
+          disable-animations: true
+          emulator-boot-timeout: 600
+          script: |
+            set -euxo pipefail
+            mkdir -p "$RUNNER_TEMP/android-smoke"
 
-      - name: Install Android emulator image
-        shell: bash
-        run: |
-          yes | sdkmanager --licenses >/dev/null || true
-          sdkmanager "platform-tools" "emulator" "platforms;android-35" "system-images;android-35;google_apis;x86_64"
+            nohup pnpm --dir apps/mobile exec expo start --dev-client --localhost --port 8081               > "$RUNNER_TEMP/android-smoke/metro.log" 2>&1 &
 
-      - name: Enable KVM
-        shell: bash
-        run: |
-          sudo tee /etc/udev/rules.d/99-kvm4all.rules >/dev/null <<'RULE'
-          KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"
-          RULE
-          sudo udevadm control --reload-rules
-          sudo udevadm trigger --name-match=kvm || true
-          ls -l /dev/kvm || true
+            timeout 120 bash -c 'until curl -fsS http://127.0.0.1:8081 >/dev/null; do sleep 2; done'
 
-      - name: Create emulator
-        shell: bash
-        run: |
-          echo no | avdmanager create avd             --force             --name openmuse-ci             --package "system-images;android-35;google_apis;x86_64"             --device "pixel_7"
+            adb reverse tcp:8081 tcp:8081
+            adb install -r "${{ steps.apk.outputs.path }}"
 
-      - name: Boot emulator
-        shell: bash
-        run: |
-          nohup emulator             -avd openmuse-ci             -no-window             -noaudio             -no-boot-anim             -gpu swiftshader_indirect             -no-snapshot             > "$RUNNER_TEMP/emulator.log" 2>&1 &
-          adb wait-for-device
-          timeout 300 bash -c 'until [[ "$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d "\r")" == "1" ]]; do sleep 5; done'
-          adb shell input keyevent 82 || true
-          adb devices -l
+            adb logcat -c
+            adb shell monkey -p app.openmuse.mobile -c android.intent.category.LAUNCHER 1
 
-      - name: Start sample OpenMuse API
-        shell: bash
-        env:
-          CPK_INTELLIGENCE_API_KEY: ci-placeholder-key
-        run: |
-          nohup pnpm dev > "$RUNNER_TEMP/openmuse-api.log" 2>&1 &
-          timeout 60 bash -c 'until curl -fsS http://127.0.0.1:8787/api/health >/dev/null; do sleep 2; done'
+            sleep 25
 
-      - name: Start Metro dev server
-        shell: bash
-        run: |
-          nohup pnpm --dir apps/mobile exec expo start --dev-client --localhost --port 8081             > "$RUNNER_TEMP/metro.log" 2>&1 &
-          timeout 90 bash -c 'until curl -fsS http://127.0.0.1:8081 >/dev/null; do sleep 2; done'
-          adb reverse tcp:8081 tcp:8081
-          adb reverse tcp:8787 tcp:8787
+            PID="$(adb shell pidof app.openmuse.mobile | tr -d '\r')"
+            test -n "$PID"
+            echo "OpenMuse PID: $PID"
 
-      - name: Install and launch APK
-        shell: bash
-        run: |
-          adb install -r "${{ steps.apk.outputs.path }}"
-          adb logcat -c
-          adb shell monkey -p app.openmuse.mobile -c android.intent.category.LAUNCHER 1
-          sleep 15
-          adb shell pidof app.openmuse.mobile
-          adb shell dumpsys activity activities | grep -F "app.openmuse.mobile" | head -n 20
+            adb shell dumpsys activity activities               > "$RUNNER_TEMP/android-smoke/activity.txt"
 
-      - name: Verify core UI is rendered
-        shell: bash
-        run: |
-          adb shell uiautomator dump /sdcard/openmuse-ui.xml
-          adb pull /sdcard/openmuse-ui.xml "$RUNNER_TEMP/openmuse-ui.xml"
-          cat "$RUNNER_TEMP/openmuse-ui.xml"
-          grep -Eq 'text="Chat"|content-desc="Chat"' "$RUNNER_TEMP/openmuse-ui.xml"
-          grep -Eq 'text="Activity"|content-desc="Activity"' "$RUNNER_TEMP/openmuse-ui.xml"
-          grep -Eq 'text="Apps"|content-desc="Apps"' "$RUNNER_TEMP/openmuse-ui.xml"
+            adb shell uiautomator dump /sdcard/openmuse-ui.xml
+            adb pull /sdcard/openmuse-ui.xml "$RUNNER_TEMP/android-smoke/openmuse-ui.xml"
 
-      - name: Fail on fatal Android crash
-        if: always()
-        shell: bash
-        run: |
-          adb logcat -d > "$RUNNER_TEMP/logcat.txt" || true
-          if grep -E "FATAL EXCEPTION:|AndroidRuntime:.*Process: app\.openmuse\.mobile" "$RUNNER_TEMP/logcat.txt"; then
-            echo "OpenMuse crashed during installed-app smoke test."
-            exit 1
-          fi
+            adb exec-out screencap -p               > "$RUNNER_TEMP/android-smoke/openmuse-screen.png"
 
-      - name: Collect smoke artifacts
+            adb logcat -d               > "$RUNNER_TEMP/android-smoke/logcat.txt"
+
+            test -s "$RUNNER_TEMP/android-smoke/openmuse-screen.png"
+            test -s "$RUNNER_TEMP/android-smoke/openmuse-ui.xml"
+
+            grep -Eq 'Welcome to OpenMuse|Open workspace|A little room for your day'               "$RUNNER_TEMP/android-smoke/openmuse-ui.xml"
+
+            if grep -E 'FATAL EXCEPTION:|AndroidRuntime:.*Process: app\.openmuse\.mobile'               "$RUNNER_TEMP/android-smoke/logcat.txt"; then
+              echo "OpenMuse crashed during installed-app smoke test."
+              exit 1
+            fi
+
+      - name: Collect APK
         if: always()
         shell: bash
         run: |
           mkdir -p "$RUNNER_TEMP/android-smoke"
-          cp "${{ steps.apk.outputs.path }}" "$RUNNER_TEMP/android-smoke/openmuse-debug.apk" 2>/dev/null || true
-          cp "$RUNNER_TEMP/openmuse-ui.xml" "$RUNNER_TEMP/android-smoke/" 2>/dev/null || true
-          cp "$RUNNER_TEMP/logcat.txt" "$RUNNER_TEMP/android-smoke/" 2>/dev/null || true
-          cp "$RUNNER_TEMP/emulator.log" "$RUNNER_TEMP/android-smoke/" 2>/dev/null || true
-          cp "$RUNNER_TEMP/openmuse-api.log" "$RUNNER_TEMP/android-smoke/" 2>/dev/null || true
-          cp "$RUNNER_TEMP/metro.log" "$RUNNER_TEMP/android-smoke/" 2>/dev/null || true
+          cp "${{ steps.apk.outputs.path }}"             "$RUNNER_TEMP/android-smoke/openmuse-debug.apk" 2>/dev/null || true
 
-      - name: Upload APK and logs
+      - name: Upload APK, screenshot, UI tree and logs
         if: always()
         uses: actions/upload-artifact@v4
         with:
