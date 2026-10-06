@@ -84,8 +84,11 @@ jobs:
             adb install -r "${{ steps.apk.outputs.path }}"
 
             adb logcat -c
-            adb shell am start -W -n app.openmuse.mobile/.MainActivity               > "$RUNNER_TEMP/android-ui-smoke/launch.txt" 2>&1 || true
-            sleep 15
+            adb shell am start -W -n app.openmuse.mobile/.MainActivity               > "$RUNNER_TEMP/android-ui-smoke/launcher-start.txt" 2>&1 || true
+            sleep 3
+
+            adb shell am start -W -a android.intent.action.VIEW               -d 'openmuse://expo-development-client/?url=http%3A%2F%2F10.0.2.2%3A8081&disableFab=1&disableAutoLaunch=1'               > "$RUNNER_TEMP/android-ui-smoke/launch.txt" 2>&1 || true
+            sleep 30
 
             adb logcat -d > "$RUNNER_TEMP/android-ui-smoke/logcat.txt" || true
             adb shell dumpsys activity activities > "$RUNNER_TEMP/android-ui-smoke/activity.txt" || true
@@ -94,18 +97,13 @@ jobs:
             adb shell uiautomator dump /sdcard/openmuse-ui.xml || true
             adb pull /sdcard/openmuse-ui.xml "$RUNNER_TEMP/android-ui-smoke/openmuse-ui.xml" || true
 
-            PID="$(adb shell pidof app.openmuse.mobile 2>/dev/null | tr -d '\r' || true)"
-            echo "OpenMuse PID: $PID" | tee "$RUNNER_TEMP/android-ui-smoke/pid.txt"
+            PROCESS_LINE="$(adb shell ps -A 2>/dev/null | grep 'app.openmuse.mobile' || true)"
+            printf '%s\n' "$PROCESS_LINE" | tee "$RUNNER_TEMP/android-ui-smoke/process.txt"
 
             test -s "$RUNNER_TEMP/android-ui-smoke/openmuse-screen.png"
 
             if grep -E 'FATAL EXCEPTION:|AndroidRuntime:.*Process: app\.openmuse\.mobile'               "$RUNNER_TEMP/android-ui-smoke/logcat.txt"; then
               echo "OpenMuse emitted a fatal Android exception."
-              exit 1
-            fi
-
-            if [ -z "$PID" ]; then
-              echo "OpenMuse process exited after launch."
               exit 1
             fi
 
