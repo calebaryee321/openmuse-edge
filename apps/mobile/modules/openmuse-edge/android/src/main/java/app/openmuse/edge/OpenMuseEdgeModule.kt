@@ -1,5 +1,8 @@
 package app.openmuse.edge
 
+import android.content.ComponentName
+import android.content.Intent
+import android.provider.Settings
 import com.google.ai.edge.litertlm.Backend
 import com.google.ai.edge.litertlm.Conversation
 import com.google.ai.edge.litertlm.Engine
@@ -25,6 +28,78 @@ class OpenMuseEdgeModule : Module() {
 
     Function("getRuntimeStats") {
       runtimeStats()
+    }
+
+    Function("hasNotificationAccess") {
+      val context =
+        requireNotNull(appContext.reactContext?.applicationContext) {
+          "Android application context is unavailable."
+        }
+
+      val component =
+        ComponentName(
+          context,
+          OpenMuseNotificationListenerService::class.java,
+        ).flattenToString()
+
+      Settings.Secure.getString(
+        context.contentResolver,
+        "enabled_notification_listeners",
+      )?.split(":")?.any { it.equals(component, ignoreCase = true) } == true
+    }
+
+    Function("openNotificationAccessSettings") {
+      val context =
+        requireNotNull(appContext.reactContext?.applicationContext) {
+          "Android application context is unavailable."
+        }
+
+      val intent =
+        Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)
+          .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+
+      context.startActivity(intent)
+      true
+    }
+
+    Function("getRecentNotificationEvents") { limit: Int ->
+      val context =
+        requireNotNull(appContext.reactContext?.applicationContext) {
+          "Android application context is unavailable."
+        }
+
+      NotificationEventStore.recent(context, limit).map(NotificationEventStore::toMap)
+    }
+
+    Function("clearNotificationEvents") {
+      val context =
+        requireNotNull(appContext.reactContext?.applicationContext) {
+          "Android application context is unavailable."
+        }
+
+      NotificationEventStore.clear(context)
+      true
+    }
+
+    Function("updateNotificationTriage") {
+        id: String,
+        importance: Double,
+        actionRequired: Boolean,
+        reason: String,
+      ->
+      val context =
+        requireNotNull(appContext.reactContext?.applicationContext) {
+          "Android application context is unavailable."
+        }
+
+      NotificationEventStore.updateTriage(
+        context,
+        id,
+        importance.coerceIn(0.0, 1.0),
+        actionRequired,
+        reason,
+      )
+      true
     }
 
     AsyncFunction("loadModel") Coroutine { modelPath: String, backend: String ->
@@ -160,7 +235,7 @@ class OpenMuseEdgeModule : Module() {
     }
 
     Function("cancelGeneration") {
-      activeConversation?.cancel()
+      activeConversation?.cancelProcess()
       true
     }
 
