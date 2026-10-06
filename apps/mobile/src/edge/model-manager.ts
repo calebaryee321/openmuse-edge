@@ -100,6 +100,8 @@ class EdgeModelManager {
   private snapshots = new Map<EdgeAgentId, ModelManagerSnapshot>();
   private listeners = new Set<() => void>();
   private downloads = new Map<EdgeAgentId, FileSystem.DownloadResumable>();
+  private loads = new Map<EdgeAgentId, Promise<EdgeRuntimeStats>>();
+  private loadTail: Promise<void> = Promise.resolve();
 
   constructor() {
     for (const model of EDGE_MODELS) {
@@ -345,26 +347,51 @@ class EdgeModelManager {
   }
 
   async load(modelId: EdgeAgentId, backend: "auto" | "npu" | "gpu" | "cpu" = "auto") {
-    await this.refresh(modelId);
-    const current = this.getSnapshot(modelId);
-    if (!current.localUri) throw new Error("Install the model before loading it.");
+    const existing = this.loads.get(modelId);
+    if (existing) return existing;
 
-    this.update(modelId, { state: "loading", error: undefined });
+    const task = this.loadTail
+      .catch(() => {})
+      .then(async () => {
+        await this.refresh(modelId);
+        const current = this.getSnapshot(modelId);
+        if (!current.localUri) throw new Error("Install the model before loading it.");
+
+        const runtime = OpenMuseEdge.getRuntimeStats();
+        if (runtime.loaded && runtime.modelPath === current.localUri) {
+          this.syncRuntime(runtime);
+          return runtime;
+        }
+
+        this.update(modelId, { state: "loading", error: undefined });
+
+        try {
+          const loaded = await OpenMuseEdge.loadModel(current.localUri, backend);
+          this.syncRuntime(loaded);
+          return loaded;
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error);
+          // Loading and installation are separate states. A runtime failure must
+          // never make an already-downloaded model look missing.
+          this.update(modelId, {
+            state: current.localUri ? "installed" : "error",
+            localUri: current.localUri,
+            error: message,
+          });
+          throw error;
+        }
+      });
+
+    this.loads.set(modelId, task);
+    this.loadTail = task.then(
+      () => undefined,
+      () => undefined,
+    );
 
     try {
-      const runtime = await OpenMuseEdge.loadModel(current.localUri, backend);
-      this.syncRuntime(runtime);
-      return runtime;
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      // Loading and installation are separate states. A runtime failure must
-      // never make an already-downloaded model look missing.
-      this.update(modelId, {
-        state: current.localUri ? "installed" : "error",
-        localUri: current.localUri,
-        error: message,
-      });
-      throw error;
+      return await task;
+    } finally {
+      if (this.loads.get(modelId) === task) this.loads.delete(modelId);
     }
   }
 
