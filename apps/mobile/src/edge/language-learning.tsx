@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { SendHorizontal } from "lucide-react-native";
 import { Pressable, Text, View } from "react-native";
 import { Button, Card, Chip, ErrorNotice, Field, colors, s } from "../ui";
@@ -10,6 +10,10 @@ import {
   type LanguagePracticeMode,
 } from "./language-agent";
 import type { AgentHandoff } from "./agent-protocol";
+import {
+  recommendFrenchMission,
+  type LanguageMission,
+} from "./language-missions";
 import { useEdgeModel } from "./use-model-manager";
 
 const LANGUAGES = ["French", "Spanish", "Italian", "German"] as const;
@@ -76,6 +80,7 @@ export function LanguageLearning() {
     completedMissions: [],
   });
   const [handoffs, setHandoffs] = useState<AgentHandoff[]>([]);
+  const [activeMission, setActiveMission] = useState<LanguageMission | null>(null);
   const [turns, setTurns] = useState<LocalTurn[]>([]);
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
@@ -89,6 +94,17 @@ export function LanguageLearning() {
     });
   }, []);
 
+
+  const recommendedMission = useMemo(
+    () =>
+      language === "French"
+        ? recommendFrenchMission({
+            completedMissionIds: profile.completedMissions,
+            recurringWeakPoints: profile.weakPoints,
+          })
+        : undefined,
+    [language, profile.completedMissions, profile.weakPoints],
+  );
 
   async function practice(textOverride?: string) {
     const text = (textOverride ?? input).trim();
@@ -108,6 +124,7 @@ export function LanguageLearning() {
         mode: mode as LanguagePracticeMode,
         userText: text,
         history: before,
+        mission: activeMission ?? undefined,
       });
       const completed: LocalTurn[] = [...withUser, { role: "assistant", text: response.text }];
       setTurns(completed);
@@ -125,6 +142,7 @@ export function LanguageLearning() {
     setInput("");
     setError("");
     setHandoffs([]);
+    setActiveMission(null);
   }
 
   return (
@@ -162,6 +180,46 @@ export function LanguageLearning() {
           ))}
         </View>
       </View>
+
+      {recommendedMission && (
+        <Card
+          style={{
+            padding: 16,
+            gap: 10,
+            backgroundColor: "#FFF8EE",
+            borderRadius: 22,
+          }}
+        >
+          <View style={s.between}>
+            <View style={{ flex: 1, gap: 3 }}>
+              <Text style={[s.heading, { fontSize: 17 }]}>Recommended mission</Text>
+              <Text style={s.small}>Functional practice based on your current profile.</Text>
+            </View>
+            <Chip tint={colors.orange}>{recommendedMission.recommendedMode}</Chip>
+          </View>
+          <View style={{ gap: 4 }}>
+            <Text style={[s.heading, { fontSize: 16 }]}>{recommendedMission.title}</Text>
+            <Text style={s.muted}>{recommendedMission.objective}</Text>
+          </View>
+          <Text style={s.small}>
+            Focus: {recommendedMission.skillFocus.join(" · ")}
+          </Text>
+          <Button
+            primary
+            busy={busy}
+            onPress={() => {
+              setActiveMission(recommendedMission);
+              setTurns([]);
+              setHandoffs([]);
+              void practice(
+                `Begin the mission "${recommendedMission.title}". Stay in character and start the scenario naturally.`,
+              );
+            }}
+          >
+            Start mission
+          </Button>
+        </Card>
+      )}
 
       <Card
         style={{
