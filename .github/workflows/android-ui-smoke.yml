@@ -1,9 +1,6 @@
 name: Android UI smoke
 
 on:
-  push:
-    branches:
-      - feature/openmuse-edge-v0
   workflow_dispatch:
 
 permissions:
