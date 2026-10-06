@@ -16,6 +16,13 @@ android {
 }
 
 dependencies {
-  implementation "com.google.ai.edge.litertlm:litertlm-android:0.12.0"
+  implementation "com.google.ai.edge.litertlm:litertlm-android:0.17.1"
   implementation "androidx.work:work-runtime-ktx:2.12.0"
+}
+
+
+tasks.withType(org.jetbrains.kotlin.gradle.tasks.KotlinCompile).configureEach {
+  compilerOptions {
+    freeCompilerArgs.add("-Xskip-metadata-version-check")
+  }
 }
