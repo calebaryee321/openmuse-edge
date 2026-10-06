@@ -1,0 +1,39 @@
+name: Edge checks
+
+on:
+  push:
+    branches:
+      - feature/openmuse-edge-v0
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: edge-checks-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  mobile-typecheck:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - uses: pnpm/action-setup@v4
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Typecheck mobile app
+        run: pnpm --dir apps/mobile typecheck
+
+      - name: Validate Edge model manifest
+        run: node -e "const m=require('./resources/edge-models.json'); if(m.models?.length!==3) process.exit(1); console.log(m.models.map(x=>x.id+': '+x.artifact).join('\n'))"
