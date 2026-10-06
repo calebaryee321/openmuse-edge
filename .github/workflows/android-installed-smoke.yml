@@ -12,6 +12,7 @@ on:
       - "apps/mobile/App.tsx"
       - "apps/mobile/app.json"
       - ".github/workflows/android-installed-smoke.yml"
+      - ".github/scripts/android-standalone-smoke.sh"
   workflow_dispatch:
 
 permissions:
@@ -55,6 +56,19 @@ jobs:
       - name: Generate native Android project
         run: pnpm --dir apps/mobile exec expo prebuild --platform android --clean --no-install
 
+      - name: Verify Kotlin runtime alignment
+        working-directory: apps/mobile/android
+        shell: bash
+        run: |
+          ./gradlew :app:dependencyInsight --dependency org.jetbrains.kotlin:kotlin-reflect --configuration releaseRuntimeClasspath > "$RUNNER_TEMP/kotlin-reflect.txt"
+          ./gradlew :app:dependencyInsight --dependency org.jetbrains.kotlin:kotlin-stdlib --configuration releaseRuntimeClasspath > "$RUNNER_TEMP/kotlin-stdlib.txt"
+          cat "$RUNNER_TEMP/kotlin-reflect.txt"
+          cat "$RUNNER_TEMP/kotlin-stdlib.txt"
+          if grep -Eq 'kotlin-(reflect|stdlib)([^:]*):2\.4\.' "$RUNNER_TEMP/kotlin-reflect.txt" "$RUNNER_TEMP/kotlin-stdlib.txt"; then
+            echo "Kotlin 2.4 runtime detected; refusing to build an Expo 54 APK with a mixed Kotlin runtime."
+            exit 1
+          fi
+
       - name: Build standalone test APK
         working-directory: apps/mobile/android
         env:
@@ -78,42 +92,7 @@ jobs:
           profile: pixel_7
           disable-animations: true
           emulator-boot-timeout: 600
-          script: |
-            set -eu
-            mkdir -p "$RUNNER_TEMP/android-smoke"
-
-            adb install -r "${{ steps.apk.outputs.path }}"
-
-            adb logcat -c
-            adb shell monkey -p app.openmuse.mobile -c android.intent.category.LAUNCHER 1
-
-            sleep 25
-
-            adb logcat -d > "$RUNNER_TEMP/android-smoke/logcat.txt"
-            adb shell dumpsys activity activities > "$RUNNER_TEMP/android-smoke/activity.txt"
-
-            PID="$(adb shell pidof app.openmuse.mobile | tr -d '\r')"
-            if [ -z "$PID" ]; then
-              echo "OpenMuse process exited after launch."
-              grep -E 'FATAL EXCEPTION:|AndroidRuntime|Fatal signal|Abort message|Process: app\.openmuse\.mobile|ReactNativeJS' "$RUNNER_TEMP/android-smoke/logcat.txt" || true
-              exit 1
-            fi
-            echo "OpenMuse PID: $PID"
-
-            adb shell uiautomator dump /sdcard/openmuse-ui.xml
-            adb pull /sdcard/openmuse-ui.xml "$RUNNER_TEMP/android-smoke/openmuse-ui.xml"
-
-            adb exec-out screencap -p > "$RUNNER_TEMP/android-smoke/openmuse-screen.png"
-
-            test -s "$RUNNER_TEMP/android-smoke/openmuse-screen.png"
-            test -s "$RUNNER_TEMP/android-smoke/openmuse-ui.xml"
-
-            grep -Eq 'Welcome to OpenMuse|Open workspace|A little room for your day|Open Device AI' "$RUNNER_TEMP/android-smoke/openmuse-ui.xml"
-
-            if grep -E 'FATAL EXCEPTION:|AndroidRuntime:.*Process: app\.openmuse\.mobile|Fatal signal.*app\.openmuse\.mobile|Abort message' "$RUNNER_TEMP/android-smoke/logcat.txt"; then
-              echo "OpenMuse crashed during standalone installed-app smoke test."
-              exit 1
-            fi
+          script: bash .github/scripts/android-standalone-smoke.sh "${{ steps.apk.outputs.path }}"
 
       - name: Collect APK
         if: always()
