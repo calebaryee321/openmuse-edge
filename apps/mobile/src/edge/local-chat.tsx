@@ -38,6 +38,31 @@ export function LocalChat({ onClose }: { onClose: () => void }) {
   }, []);
 
   useEffect(() => {
+    let active = true;
+
+    void (async () => {
+      try {
+        await edgeModelManager.refresh("muse");
+        const snapshot = edgeModelManager.getSnapshot("muse");
+        if (
+          active &&
+          snapshot.localUri &&
+          snapshot.state !== "loaded" &&
+          snapshot.state !== "loading"
+        ) {
+          await edgeModelManager.load("muse", "auto");
+        }
+      } catch (value) {
+        if (active) setError(value instanceof Error ? value.message : String(value));
+      }
+    })();
+
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  useEffect(() => {
     if (turns.length > 0) {
       requestAnimationFrame(() => listRef.current?.scrollToEnd({ animated: true }));
     }
@@ -147,9 +172,11 @@ export function LocalChat({ onClose }: { onClose: () => void }) {
                 <Text style={s.small}>
                   {muse.state === "loaded"
                     ? `On device · ${muse.runtime.backend?.toUpperCase() || "local"}`
-                    : downloaded
-                      ? "Downloaded · starts when needed"
-                      : "Muse not installed"}
+                    : muse.state === "loading"
+                      ? "Starting local model…"
+                      : downloaded
+                        ? "Downloaded · ready to start"
+                        : "Muse not installed"}
                 </Text>
               </View>
             </View>
@@ -264,7 +291,11 @@ export function LocalChat({ onClose }: { onClose: () => void }) {
                 }}
               >
                 <ActivityIndicator size="small" color={colors.muted} />
-                <Text style={s.small}>Muse is thinking…</Text>
+                <Text style={s.small}>
+                  {muse.state === "loading"
+                    ? "Starting Muse locally… this can take several seconds."
+                    : "Muse is thinking…"}
+                </Text>
               </View>
             ) : null
           }
