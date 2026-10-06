@@ -100,7 +100,7 @@ test("delegation policy limits model swaps", () => {
 });
 
 test("normalization and skill bands are bounded", () => {
-  assert.equal(normalizeErrorKey("  Gender—Agreement!! "), "genderagreement");
+  assert.equal(normalizeErrorKey("  Gender—Agreement!! "), "gender agreement");
   assert.equal(clampBand(-9), 0);
   assert.equal(clampBand(9), 4);
 });
