@@ -6,8 +6,15 @@ import android.service.notification.StatusBarNotification
 import androidx.work.Data
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.launch
 
 class OpenMuseNotificationListenerService : NotificationListenerService() {
+  private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
   override fun onNotificationPosted(sbn: StatusBarNotification?) {
     val posted = sbn ?: return
     if (posted.packageName == packageName) return
@@ -37,19 +44,26 @@ class OpenMuseNotificationListenerService : NotificationListenerService() {
         isGroupSummary = false,
       )
 
-    NotificationEventStore.append(applicationContext, event)
+    serviceScope.launch {
+      NotificationEventStore.append(applicationContext, event)
 
-    val input =
-      Data.Builder()
-        .putString(NotificationTriageWorker.KEY_EVENT_ID, event.id)
-        .build()
+      val input =
+        Data.Builder()
+          .putString(NotificationTriageWorker.KEY_EVENT_ID, event.id)
+          .build()
 
-    val request =
-      OneTimeWorkRequestBuilder<NotificationTriageWorker>()
-        .setInputData(input)
-        .addTag(NotificationTriageWorker.TAG)
-        .build()
+      val request =
+        OneTimeWorkRequestBuilder<NotificationTriageWorker>()
+          .setInputData(input)
+          .addTag(NotificationTriageWorker.TAG)
+          .build()
 
-    WorkManager.getInstance(applicationContext).enqueue(request)
+      WorkManager.getInstance(applicationContext).enqueue(request)
+    }
+  }
+
+  override fun onDestroy() {
+    serviceScope.cancel()
+    super.onDestroy()
   }
 }
