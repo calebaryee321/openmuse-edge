@@ -4,9 +4,22 @@ import { newAgentTask } from "./agent-protocol";
 import { delegateWithFallback } from "./agent-orchestrator";
 import { isAgentAvailable } from "./agent-runtime";
 import type { LocalTurn } from "./local-assistant";
+import {
+  DEFAULT_SKILL_BANDS,
+  createReviewItem,
+  normalizeErrorKey,
+  recordErrorPattern,
+  shouldRunSageExplanation,
+  shouldRunScoutEvaluation,
+  type ErrorPattern,
+  type ReviewItem,
+  type SkillBands,
+} from "./language-training";
 
 const ROOT = `${FileSystem.documentDirectory}openmuse-edge/language-agent/`;
 const PROFILE_FILE = `${ROOT}profile.json`;
+const PROFILE_SCHEMA_VERSION = 2;
+const SESSION_GAP_MS = 2 * 60 * 60 * 1000;
 
 export type LanguagePracticeMode =
   | "Conversation"
@@ -15,14 +28,21 @@ export type LanguagePracticeMode =
   | "Travel role-play";
 
 export type LanguageLearnerProfile = {
+  schemaVersion: 2;
   language: string;
   level: string;
   totalTurns: number;
+  totalSessions: number;
   goals: string[];
   weakPoints: string[];
   vocabulary: string[];
   recentCorrections: string[];
+  skillBands: SkillBands;
+  errorPatterns: ErrorPattern[];
+  reviewQueue: ReviewItem[];
+  completedMissions: string[];
   lastPracticedAt?: string;
+  lastAssessmentAt?: string;
 };
 
 export type LanguageTurnAnalysis = {
@@ -42,29 +62,59 @@ export type LanguageAgentReply = {
 };
 
 const EMPTY_PROFILE: LanguageLearnerProfile = {
+  schemaVersion: PROFILE_SCHEMA_VERSION,
   language: "French",
   level: "Beginner",
   totalTurns: 0,
+  totalSessions: 0,
   goals: ["Hold practical everyday conversations"],
   weakPoints: [],
   vocabulary: [],
   recentCorrections: [],
+  skillBands: { ...DEFAULT_SKILL_BANDS },
+  errorPatterns: [],
+  reviewQueue: [],
+  completedMissions: [],
 };
 
 async function ensureRoot() {
   await FileSystem.makeDirectoryAsync(ROOT, { intermediates: true });
 }
 
+function migrateProfile(value: unknown): LanguageLearnerProfile {
+  const parsed =
+    value && typeof value === "object" ? (value as Partial<LanguageLearnerProfile>) : {};
+
+  return {
+    ...EMPTY_PROFILE,
+    ...parsed,
+    schemaVersion: PROFILE_SCHEMA_VERSION,
+    goals: Array.isArray(parsed.goals) ? parsed.goals : EMPTY_PROFILE.goals,
+    weakPoints: Array.isArray(parsed.weakPoints) ? parsed.weakPoints : [],
+    vocabulary: Array.isArray(parsed.vocabulary) ? parsed.vocabulary : [],
+    recentCorrections: Array.isArray(parsed.recentCorrections) ? parsed.recentCorrections : [],
+    skillBands: {
+      ...DEFAULT_SKILL_BANDS,
+      ...(parsed.skillBands ?? {}),
+    },
+    errorPatterns: Array.isArray(parsed.errorPatterns) ? parsed.errorPatterns : [],
+    reviewQueue: Array.isArray(parsed.reviewQueue) ? parsed.reviewQueue : [],
+    completedMissions: Array.isArray(parsed.completedMissions) ? parsed.completedMissions : [],
+    totalSessions:
+      typeof parsed.totalSessions === "number" && parsed.totalSessions >= 0
+        ? parsed.totalSessions
+        : 0,
+  };
+}
+
 export async function loadLanguageAgentProfile(): Promise<LanguageLearnerProfile> {
   try {
     const info = await FileSystem.getInfoAsync(PROFILE_FILE);
-    if (!info.exists) return EMPTY_PROFILE;
-    return {
-      ...EMPTY_PROFILE,
-      ...(JSON.parse(await FileSystem.readAsStringAsync(PROFILE_FILE)) as LanguageLearnerProfile),
-    };
+    if (!info.exists) return { ...EMPTY_PROFILE, skillBands: { ...DEFAULT_SKILL_BANDS } };
+    const raw = JSON.parse(await FileSystem.readAsStringAsync(PROFILE_FILE));
+    return migrateProfile(raw);
   } catch {
-    return EMPTY_PROFILE;
+    return { ...EMPTY_PROFILE, skillBands: { ...DEFAULT_SKILL_BANDS } };
   }
 }
 
@@ -98,9 +148,9 @@ function parseAnalysis(value: string): LanguageTurnAnalysis | undefined {
 
   return {
     corrected: typeof parsed.corrected === "string" ? parsed.corrected : undefined,
-    errors: asStrings(parsed.errors).slice(0, 4),
-    vocabulary: asStrings(parsed.vocabulary).slice(0, 5),
-    focus: typeof parsed.focus === "string" ? parsed.focus : undefined,
+    errors: asStrings(parsed.errors).map((item) => item.trim()).filter(Boolean).slice(0, 4),
+    vocabulary: asStrings(parsed.vocabulary).map((item) => item.trim()).filter(Boolean).slice(0, 5),
+    focus: typeof parsed.focus === "string" ? parsed.focus.trim() : undefined,
     confidence:
       typeof parsed.confidence === "number"
         ? Math.max(0, Math.min(1, parsed.confidence))
@@ -136,11 +186,12 @@ function tutorInstruction(
   return [
     `You are the teaching worker inside the OpenMuse Language Agent for ${profile.language}.`,
     `Learner level: ${profile.level}.`,
-    `Known weak points: ${profile.weakPoints.join(", ") || "none recorded yet"}.`,
+    `Known recurring weak points: ${profile.weakPoints.join(", ") || "none recorded yet"}.`,
     `Recently useful vocabulary: ${profile.vocabulary.slice(0, 12).join(", ") || "none yet"}.`,
     modeRules[mode],
     "Keep one clear conversational objective per turn.",
     "Do not dump a long grammar lecture unless specifically needed.",
+    "Distinguish grammatical correctness from what sounds natural or culturally appropriate.",
     analysis?.corrected ? `Scout correction signal: ${analysis.corrected}` : "",
     analysis?.focus ? `Scout focus signal: ${analysis.focus}` : "",
     deepNote ? `Sage teaching note: ${deepNote}` : "",
@@ -149,20 +200,59 @@ function tutorInstruction(
     .join("\n");
 }
 
+function startsNewSession(lastPracticedAt?: string) {
+  if (!lastPracticedAt) return true;
+  const last = new Date(lastPracticedAt).getTime();
+  return !Number.isFinite(last) || Date.now() - last >= SESSION_GAP_MS;
+}
+
+function addReviewItemIfMissing(items: ReviewItem[], item: ReviewItem) {
+  const duplicate = items.some(
+    (existing) =>
+      existing.kind === item.kind &&
+      existing.prompt.trim().toLowerCase() === item.prompt.trim().toLowerCase(),
+  );
+  return duplicate ? items : [item, ...items].slice(0, 120);
+}
+
+function recurringLabels(patterns: ErrorPattern[]) {
+  return patterns
+    .filter((pattern) => pattern.status === "recurring" || pattern.status === "improving")
+    .sort((a, b) => b.count - a.count)
+    .map((pattern) => pattern.label)
+    .slice(0, 12);
+}
+
 export async function runLanguageAgent(args: {
   language: string;
   level: string;
   mode: LanguagePracticeMode;
   userText: string;
   history: LocalTurn[];
+  missionCheckpoint?: boolean;
 }): Promise<LanguageAgentReply> {
   let profile = await loadLanguageAgentProfile();
-  profile = { ...profile, language: args.language, level: args.level };
+  const newSession = startsNewSession(profile.lastPracticedAt);
+  profile = {
+    ...profile,
+    language: args.language,
+    level: args.level,
+    totalSessions: newSession ? profile.totalSessions + 1 : profile.totalSessions,
+  };
 
   const handoffs: AgentHandoff[] = [];
   let analysis: LanguageTurnAnalysis | undefined;
 
-  if (await isAgentAvailable("scout")) {
+  const hasScout = await isAgentAvailable("scout");
+  const runScout = shouldRunScoutEvaluation({
+    mode: args.mode,
+    totalTurns: profile.totalTurns,
+    hasScout,
+    userText: args.userText,
+    missionCheckpoint: args.missionCheckpoint,
+  });
+
+  if (runScout) {
     const evaluationTask = newAgentTask(
       "language-agent",
       "scout",
@@ -170,11 +260,15 @@ export async function runLanguageAgent(args: {
       [
         `Evaluate one ${args.language} learner turn at ${args.level} level.`,
         "Return ONLY JSON with keys:",
-        '{"corrected":"optional corrected sentence","errors":["short labels"],"vocabulary":["useful new items"],"focus":"single skill","confidence":0.0,"needsDeepExplanation":false}',
+        '{"corrected":"optional corrected sentence","errors":["short stable error labels"],"vocabulary":["useful new items"],"focus":"single skill","confidence":0.0,"needsDeepExplanation":false}',
+        "Do not treat obvious typos or fatigue slips as durable weaknesses.",
         "Keep errors and vocabulary concise.",
       ].join("\n"),
       args.userText,
-      { mode: args.mode, weakPoints: profile.weakPoints.slice(0, 6) },
+      {
+        mode: args.mode,
+        recurringWeakPoints: profile.weakPoints.slice(0, 6),
+      },
     );
 
     try {
@@ -186,36 +280,69 @@ export async function runLanguageAgent(args: {
     }
   }
 
-  let deepNote = "";
-  const requestsExplanation = /\b(why|explain|grammar|rule|difference|understand)\b/i.test(args.userText);
-  if ((analysis?.needsDeepExplanation || requestsExplanation) && (await isAgentAvailable("sage"))) {
-    const explainTask = newAgentTask(
-      "language-agent",
-      "sage",
-      "explain",
-      [
-        `Act as a senior ${args.language} pedagogy specialist.`,
-        "Give the teaching agent a concise explanation strategy, not a user-facing essay.",
-        "Focus on the learner's exact mistake/question and include one memorable contrast or example.",
-      ].join("\n"),
-      args.userText,
-      { level: args.level, analysis },
-    );
+  const turnId = `turn-${profile.totalTurns + 1}-${Date.now()}`;
+  let errorPatterns = profile.errorPatterns;
+  for (const error of analysis?.errors ?? []) {
+    errorPatterns = recordErrorPattern(errorPatterns, {
+      label: error,
+      turnId,
+      example: args.userText,
+    });
+  }
 
-    try {
-      const delegated = await delegateWithFallback(explainTask, "muse");
-      handoffs.push(...delegated.trace.handoffs);
-      deepNote = delegated.result.output;
-    } catch {
-      // Deep explanation is an enhancement, not a blocker.
+  const recurringWeaknessCount = (analysis?.errors ?? []).filter((error) => {
+    const key = normalizeErrorKey(error);
+    return errorPatterns.some(
+      (pattern) => pattern.key === key && pattern.status === "recurring",
+    );
+  }).length;
+
+  let deepNote = "";
+  const potentialDeepNeed =
+    analysis?.needsDeepExplanation === true ||
+    /\b(why|explain|grammar|rule|difference|nuance|understand)\b/i.test(args.userText) ||
+    recurringWeaknessCount >= 2;
+
+  if (potentialDeepNeed) {
+    const hasSage = await isAgentAvailable("sage");
+    if (
+      shouldRunSageExplanation({
+        hasSage,
+        userText: args.userText,
+        scoutRequested: analysis?.needsDeepExplanation,
+        recurringWeaknessCount,
+      })
+    ) {
+      const explainTask = newAgentTask(
+        "language-agent",
+        "sage",
+        "explain",
+        [
+          `Act as a senior ${args.language} pedagogy specialist.`,
+          "Give the teaching agent a concise explanation strategy, not a user-facing essay.",
+          "Focus on the learner's exact mistake/question.",
+          "Include one memorable contrast/example and one likely misconception.",
+        ].join("\n"),
+        args.userText,
+        { level: args.level, analysis, recurringWeaknessCount },
+      );
+
+      try {
+        const delegated = await delegateWithFallback(explainTask, "muse");
+        handoffs.push(...delegated.trace.handoffs);
+        deepNote = delegated.result.output;
+      } catch {
+        // Deep explanation is an enhancement, not a blocker.
+      }
     }
   }
 
+  const nextWeakPoints = recurringLabels(errorPatterns);
   const teachTask = newAgentTask(
     "language-agent",
     "muse",
     "coach",
-    tutorInstruction(profile, args.mode, analysis, deepNote),
+    tutorInstruction({ ...profile, weakPoints: nextWeakPoints }, args.mode, analysis, deepNote),
     [
       historyText(args.history) || "(new session)",
       "",
@@ -226,7 +353,7 @@ export async function runLanguageAgent(args: {
       profile: {
         language: profile.language,
         level: profile.level,
-        weakPoints: profile.weakPoints.slice(0, 8),
+        weakPoints: nextWeakPoints.slice(0, 8),
       },
       mode: args.mode,
     },
@@ -235,10 +362,37 @@ export async function runLanguageAgent(args: {
   const taught = await delegateWithFallback(teachTask);
   handoffs.push(...taught.trace.handoffs);
 
+  let reviewQueue = profile.reviewQueue;
+  for (const vocabulary of analysis?.vocabulary ?? []) {
+    reviewQueue = addReviewItemIfMissing(
+      reviewQueue,
+      createReviewItem({
+        id: `vocab-${normalizeErrorKey(vocabulary)}-${Date.now()}`,
+        kind: "vocabulary",
+        prompt: vocabulary,
+        answer: `Use "${vocabulary}" naturally in ${args.language}.`,
+      }),
+    );
+  }
+
+  if (analysis?.corrected) {
+    reviewQueue = addReviewItemIfMissing(
+      reviewQueue,
+      createReviewItem({
+        id: `correction-${Date.now()}`,
+        kind: "correction",
+        prompt: args.userText,
+        answer: analysis.corrected,
+      }),
+    );
+  }
+
   profile = {
     ...profile,
     totalTurns: profile.totalTurns + 1,
-    weakPoints: uniqueRecent(profile.weakPoints, analysis?.errors ?? [], 12),
+    weakPoints: nextWeakPoints,
+    errorPatterns,
+    reviewQueue,
     vocabulary: uniqueRecent(profile.vocabulary, analysis?.vocabulary ?? [], 40),
     recentCorrections: uniqueRecent(
       profile.recentCorrections,
