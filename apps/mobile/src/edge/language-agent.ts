@@ -4,6 +4,7 @@ import { newAgentTask } from "./agent-protocol";
 import { delegateWithFallback } from "./agent-orchestrator";
 import { isAgentAvailable } from "./agent-runtime";
 import type { LocalTurn } from "./local-assistant";
+import type { LanguageMission } from "./language-missions";
 import {
   DEFAULT_SKILL_BANDS,
   createReviewItem,
@@ -171,6 +172,7 @@ function tutorInstruction(
   mode: LanguagePracticeMode,
   analysis?: LanguageTurnAnalysis,
   deepNote?: string,
+  mission?: LanguageMission,
 ) {
   const modeRules: Record<LanguagePracticeMode, string> = {
     Conversation:
@@ -189,6 +191,11 @@ function tutorInstruction(
     `Known recurring weak points: ${profile.weakPoints.join(", ") || "none recorded yet"}.`,
     `Recently useful vocabulary: ${profile.vocabulary.slice(0, 12).join(", ") || "none yet"}.`,
     modeRules[mode],
+    mission ? `Mission: ${mission.title}` : "",
+    mission ? `Scenario: ${mission.scenario}` : "",
+    mission ? `Objective: ${mission.objective}` : "",
+    mission ? `Success criteria: ${mission.successCriteria.join(" | ")}` : "",
+    mission?.culturalFocus ? `Cultural focus: ${mission.culturalFocus}` : "",
     "Keep one clear conversational objective per turn.",
     "Do not dump a long grammar lecture unless specifically needed.",
     "Distinguish grammatical correctness from what sounds natural or culturally appropriate.",
@@ -230,6 +237,7 @@ export async function runLanguageAgent(args: {
   userText: string;
   history: LocalTurn[];
   missionCheckpoint?: boolean;
+  mission?: LanguageMission;
 }): Promise<LanguageAgentReply> {
   let profile = await loadLanguageAgentProfile();
   const newSession = startsNewSession(profile.lastPracticedAt);
@@ -342,7 +350,13 @@ export async function runLanguageAgent(args: {
     "language-agent",
     "muse",
     "coach",
-    tutorInstruction({ ...profile, weakPoints: nextWeakPoints }, args.mode, analysis, deepNote),
+    tutorInstruction(
+      { ...profile, weakPoints: nextWeakPoints },
+      args.mode,
+      analysis,
+      deepNote,
+      args.mission,
+    ),
     [
       historyText(args.history) || "(new session)",
       "",
@@ -356,6 +370,13 @@ export async function runLanguageAgent(args: {
         weakPoints: nextWeakPoints.slice(0, 8),
       },
       mode: args.mode,
+      mission: args.mission
+        ? {
+            id: args.mission.id,
+            title: args.mission.title,
+            objective: args.mission.objective,
+          }
+        : undefined,
     },
   );
 
