@@ -52,6 +52,7 @@ import {
   s,
 } from "./ui";
 import { useWorkspace } from "./workspace";
+import { DeviceAiCard } from "./edge/device-ai";
 
 export function statusLabel(value: string) {
   return value.replace(/_/g, " ").replace(/^./, (c) => c.toUpperCase());
@@ -1734,6 +1735,7 @@ export function AppsScreen() {
         placeholder="Search connectors"
       />
       <ConnectionsScreen query={query} />
+      <DeviceAiCard />
       <Text style={s.heading}>On your computer</Text>
       <Card style={{ paddingVertical: 3, backgroundColor: "#F4F5F6" }}>
         {shortcuts
