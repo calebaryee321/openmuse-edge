@@ -1,59 +1,263 @@
 import { useState } from "react";
+import { Cpu, HardDrive, LockKeyhole, Sparkles, Zap } from "lucide-react-native";
 import { Text, View } from "react-native";
-import { Button, Card, Chip, colors, ErrorNotice, Field, SectionHeading, s } from "../ui";
+import { Button, Card, Chip, colors, ErrorNotice, Field, s } from "../ui";
 import { formatBytes } from "./format";
 import { edgeModelManager } from "./model-manager";
-import { EDGE_MODELS, EDGE_MODEL_TOTAL_GB } from "./model-registry";
+import { EDGE_MODEL_TOTAL_GB } from "./model-registry";
 import { useEdgeModel } from "./use-model-manager";
 import { NotificationIntelligenceCard } from "./notification-intelligence";
 import { LocalAppsCard } from "./local-apps";
 
-export function DeviceAiCard() {
+function StateDot({ active }: { active: boolean }) {
   return (
-    <Card style={{ gap: 14, backgroundColor: colors.sky }}>
-      <View style={[s.between, { gap: 12 }]}>
-        <View style={{ flex: 1 }}>
-          <SectionHeading title="Device AI" />
-          <Text style={s.muted}>
-            Local-first ensemble for Pixel. Models download to app-private storage and can run
-            without sending prompts to a remote LLM.
-          </Text>
-        </View>
-        <Chip tint={colors.green}>Edge v1</Chip>
-      </View>
+    <View
+      style={{
+        width: 8,
+        height: 8,
+        borderRadius: 8,
+        backgroundColor: active ? "#3AA76D" : "#C9CDD2",
+      }}
+    />
+  );
+}
 
-      <View style={{ gap: 10 }}>
-        {EDGE_MODELS.map((model) => (
+function ModelRow({
+  name,
+  model,
+  detail,
+  state,
+}: {
+  name: string;
+  model: string;
+  detail: string;
+  state: string;
+}) {
+  const active = state === "loaded" || state === "installed";
+  return (
+    <View
+      style={{
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 12,
+        paddingVertical: 12,
+      }}
+    >
+      <View
+        style={{
+          width: 40,
+          height: 40,
+          borderRadius: 14,
+          backgroundColor: active ? "#E9F6EE" : "#F3F4F6",
+          alignItems: "center",
+          justifyContent: "center",
+        }}
+      >
+        <StateDot active={active} />
+      </View>
+      <View style={{ flex: 1, gap: 2 }}>
+        <View style={[s.row, { gap: 7, flexWrap: "wrap" }]}>
+          <Text style={[s.heading, { fontSize: 15 }]}>{name}</Text>
+          <Text style={s.small}>{model}</Text>
+        </View>
+        <Text style={s.small}>{detail}</Text>
+      </View>
+      <Text style={[s.small, { fontWeight: "700", textTransform: "capitalize" }]}>
+        {state.replace(/-/g, " ")}
+      </Text>
+    </View>
+  );
+}
+
+export function DeviceAiCard() {
+  const scout = useEdgeModel("scout");
+  const muse = useEdgeModel("muse");
+  const sage = useEdgeModel("sage");
+
+  return (
+    <View style={{ width: "100%", gap: 20 }}>
+      <View
+        style={{
+          borderRadius: 32,
+          padding: 24,
+          backgroundColor: "#101828",
+          overflow: "hidden",
+          minHeight: 220,
+          justifyContent: "space-between",
+        }}
+      >
+        <View
+          pointerEvents="none"
+          style={{
+            position: "absolute",
+            width: 190,
+            height: 190,
+            borderRadius: 190,
+            right: -58,
+            top: -42,
+            backgroundColor: "#1E3A5F",
+            opacity: 0.78,
+          }}
+        />
+        <View
+          pointerEvents="none"
+          style={{
+            position: "absolute",
+            width: 130,
+            height: 130,
+            borderRadius: 130,
+            right: 40,
+            bottom: -70,
+            backgroundColor: "#423B78",
+            opacity: 0.62,
+          }}
+        />
+
+        <View style={{ gap: 14, zIndex: 1 }}>
           <View
-            key={model.id}
             style={{
-              gap: 4,
-              paddingVertical: 10,
-              borderBottomWidth: 1,
-              borderBottomColor: colors.line,
+              alignSelf: "flex-start",
+              flexDirection: "row",
+              alignItems: "center",
+              gap: 7,
+              paddingHorizontal: 10,
+              paddingVertical: 6,
+              borderRadius: 999,
+              backgroundColor: "rgba(255,255,255,0.12)",
             }}
           >
-            <View style={s.between}>
-              <Text style={s.heading}>{model.label}</Text>
-              <Chip>{model.model}</Chip>
-            </View>
-            <Text style={s.small}>{model.role}</Text>
-            <Text style={s.small}>
-              {model.approximateSizeGb.toFixed(2)} GB · {model.preferredBackend.toUpperCase()}
-              {model.directToolCalls ? " · tool caller" : " · structured output"}
+            <LockKeyhole size={13} color="#FFFFFF" />
+            <Text style={{ color: "#FFFFFF", fontSize: 11, fontWeight: "700" }}>ON-DEVICE</Text>
+          </View>
+
+          <View style={{ maxWidth: 300, gap: 8 }}>
+            <Text
+              style={{
+                color: "#FFFFFF",
+                fontSize: 31,
+                lineHeight: 36,
+                fontWeight: "700",
+                letterSpacing: -1.1,
+              }}
+            >
+              Your AI. On your phone.
+            </Text>
+            <Text style={{ color: "#CCD5E0", fontSize: 14, lineHeight: 21 }}>
+              Chat, learn, and stay on top of what matters without sending your prompts to a remote
+              model.
             </Text>
           </View>
-        ))}
+        </View>
+
+        <View style={[s.row, { gap: 8, flexWrap: "wrap", zIndex: 1, marginTop: 22 }]}>
+          <View
+            style={{
+              flexDirection: "row",
+              gap: 6,
+              alignItems: "center",
+              paddingHorizontal: 11,
+              paddingVertical: 7,
+              borderRadius: 999,
+              backgroundColor: "rgba(255,255,255,0.10)",
+            }}
+          >
+            <Zap size={13} color="#FFFFFF" />
+            <Text style={{ color: "#FFFFFF", fontSize: 11, fontWeight: "600" }}>Local-first</Text>
+          </View>
+          <View
+            style={{
+              paddingHorizontal: 11,
+              paddingVertical: 7,
+              borderRadius: 999,
+              backgroundColor: "rgba(255,255,255,0.10)",
+            }}
+          >
+            <Text style={{ color: "#FFFFFF", fontSize: 11, fontWeight: "600" }}>
+              {muse.state === "loaded" ? "Muse ready" : "Muse setup"}
+            </Text>
+          </View>
+        </View>
       </View>
 
-      <Text style={s.small}>
-        Planned local model storage: ~{EDGE_MODEL_TOTAL_GB.toFixed(1)} GB before EmbeddingGemma.
-      </Text>
-
       <LocalAppsCard />
+
+      <Card
+        style={{
+          gap: 4,
+          padding: 18,
+          borderWidth: 1,
+          borderColor: "#ECEEF1",
+          shadowColor: "#0F172A",
+          shadowOffset: { width: 0, height: 6 },
+          shadowOpacity: 0.05,
+          shadowRadius: 18,
+          elevation: 2,
+        }}
+      >
+        <View style={[s.between, { marginBottom: 5 }]}>
+          <View style={[s.row, { gap: 10 }]}>
+            <View
+              style={{
+                width: 40,
+                height: 40,
+                borderRadius: 14,
+                backgroundColor: "#F2F4F7",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              <Cpu size={19} color={colors.text} />
+            </View>
+            <View>
+              <Text style={[s.heading, { fontSize: 18 }]}>AI engine</Text>
+              <Text style={s.small}>Three local models, one private assistant.</Text>
+            </View>
+          </View>
+          <Chip tint={colors.green}>Edge</Chip>
+        </View>
+
+        <ModelRow
+          name="Scout"
+          model="Qwen 0.8B"
+          detail="Fast triage and lightweight tasks"
+          state={scout.state}
+        />
+        <View style={{ height: 1, backgroundColor: colors.line }} />
+        <ModelRow
+          name="Muse"
+          model="Gemma 4 E2B"
+          detail="Chat, language, and orchestration"
+          state={muse.state}
+        />
+        <View style={{ height: 1, backgroundColor: colors.line }} />
+        <ModelRow
+          name="Sage"
+          model="Qwen 4B"
+          detail="Deeper reasoning when you need it"
+          state={sage.state}
+        />
+
+        <View
+          style={{
+            marginTop: 8,
+            padding: 12,
+            borderRadius: 16,
+            backgroundColor: "#F8FAFC",
+            flexDirection: "row",
+            alignItems: "center",
+            gap: 9,
+          }}
+        >
+          <HardDrive size={15} color={colors.muted} />
+          <Text style={[s.small, { flex: 1 }]}>
+            About {EDGE_MODEL_TOTAL_GB.toFixed(1)} GB for the full local model set.
+          </Text>
+        </View>
+      </Card>
+
       <MuseModelControls />
       <NotificationIntelligenceCard />
-    </Card>
+    </View>
   );
 }
 
@@ -66,9 +270,7 @@ function MuseModelControls() {
 
   const progressLabel =
     model.state === "downloading"
-      ? `${Math.round(model.progress * 100)}% · ${formatBytes(model.bytesWritten)} / ${formatBytes(
-          model.totalBytes,
-        )}`
+      ? `${Math.round(model.progress * 100)}%`
       : model.state.replace(/-/g, " ");
 
   async function act(work: () => Promise<unknown>) {
@@ -84,37 +286,74 @@ function MuseModelControls() {
   }
 
   return (
-    <View style={{ gap: 12, paddingTop: 6 }}>
-      <View style={s.between}>
-        <View style={{ flex: 1, gap: 2 }}>
-          <Text style={s.heading}>Muse model manager</Text>
-          <Text style={s.small}>Gemma 4 E2B · Tensor G5 package</Text>
+    <Card
+      style={{
+        gap: 14,
+        padding: 18,
+        borderWidth: 1,
+        borderColor: "#ECEEF1",
+        backgroundColor: "#FFFFFF",
+      }}
+    >
+      <View style={[s.between, { gap: 12 }]}>
+        <View style={[s.row, { gap: 11, flex: 1 }]}>
+          <View
+            style={{
+              width: 42,
+              height: 42,
+              borderRadius: 15,
+              backgroundColor: "#E7F4FF",
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            <Sparkles size={19} color={colors.text} />
+          </View>
+          <View style={{ flex: 1, gap: 2 }}>
+            <Text style={[s.heading, { fontSize: 18 }]}>Muse</Text>
+            <Text style={s.small}>Powers Chat, Language Coach, and richer local tasks.</Text>
+          </View>
         </View>
         <Chip tint={model.state === "loaded" ? colors.green : undefined}>{progressLabel}</Chip>
       </View>
 
       {model.freeBytes != null && (
         <Text style={s.small}>
-          Free device storage: {formatBytes(model.freeBytes)} / {formatBytes(model.totalDiskBytes)}
+          {formatBytes(model.freeBytes)} free on this phone
         </Text>
       )}
 
       {model.state === "downloading" && (
-        <View style={{ height: 7, borderRadius: 6, backgroundColor: colors.line, overflow: "hidden" }}>
+        <>
           <View
             style={{
-              height: "100%",
-              width: `${Math.max(2, Math.round(model.progress * 100))}%`,
-              backgroundColor: colors.blueDark,
+              height: 8,
+              borderRadius: 8,
+              backgroundColor: "#EDF0F3",
+              overflow: "hidden",
             }}
-          />
-        </View>
+          >
+            <View
+              style={{
+                height: "100%",
+                width: `${Math.max(2, Math.round(model.progress * 100))}%`,
+                backgroundColor: "#101828",
+              }}
+            />
+          </View>
+          <Text style={s.small}>
+            {formatBytes(model.bytesWritten)} of {formatBytes(model.totalBytes)}
+          </Text>
+        </>
       )}
 
       {(model.state === "not-installed" || model.state === "error") && (
         <>
+          <Text style={s.muted}>
+            Install Muse once and OpenMuse can use it offline for private conversations and learning.
+          </Text>
           <Field
-            label="Hugging Face token (only if the model download requires one)"
+            label="Hugging Face token · only if required"
             value={token}
             onChangeText={setToken}
             secureTextEntry
@@ -129,7 +368,7 @@ function MuseModelControls() {
               void act(() => edgeModelManager.install("muse", token.trim() || undefined))
             }
           >
-            Download Muse
+            Download Muse · ~3.1 GB
           </Button>
         </>
       )}
@@ -154,19 +393,28 @@ function MuseModelControls() {
 
       {model.state === "installed" && (
         <Button primary busy={busy} onPress={() => void act(() => edgeModelManager.load("muse"))}>
-          Load Muse locally
+          Start Muse
         </Button>
       )}
 
       {model.state === "loaded" && (
         <>
-          <Text style={s.small}>
-            Runtime: {model.runtime.backend?.toUpperCase() || "AUTO"} · local file loaded
-          </Text>
+          <View
+            style={{
+              padding: 13,
+              borderRadius: 16,
+              backgroundColor: "#F1F8F4",
+              gap: 3,
+            }}
+          >
+            <Text style={[s.heading, { fontSize: 14 }]}>Muse is ready</Text>
+            <Text style={s.small}>
+              Running locally · {model.runtime.backend?.toUpperCase() || "AUTO"} backend
+            </Text>
+          </View>
           <View style={[s.row, { gap: 8, flexWrap: "wrap" }]}>
             <Button
               small
-              primary
               busy={busy}
               onPress={() =>
                 void act(async () => {
@@ -175,10 +423,10 @@ function MuseModelControls() {
                 })
               }
             >
-              Test local AI
+              Quick test
             </Button>
             <Button small busy={busy} onPress={() => void act(() => edgeModelManager.unload("muse"))}>
-              Unload
+              Stop Muse
             </Button>
           </View>
         </>
@@ -191,24 +439,20 @@ function MuseModelControls() {
           busy={busy}
           onPress={() => void act(() => edgeModelManager.remove("muse"))}
         >
-          Delete local model
+          Remove model
         </Button>
       )}
 
       {!!result && (
-        <Card style={{ gap: 4, padding: 14, backgroundColor: colors.card }}>
-          <Text style={s.small}>Local inference result</Text>
+        <View style={{ gap: 4, padding: 14, borderRadius: 16, backgroundColor: "#F8FAFC" }}>
+          <Text style={s.small}>Local test</Text>
           <Text selectable style={s.text}>
             {result}
           </Text>
-        </Card>
+        </View>
       )}
 
       <ErrorNotice error={error || model.error} />
-      <Text style={s.small}>
-        Model weights are not committed to Git. If Hugging Face requires license acceptance,
-        accept it on the model page and use a token for this one download session.
-      </Text>
-    </View>
+    </Card>
   );
 }
