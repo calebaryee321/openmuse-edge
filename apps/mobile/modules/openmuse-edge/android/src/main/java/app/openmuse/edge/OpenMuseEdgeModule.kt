@@ -177,7 +177,7 @@ class OpenMuseEdgeModule : Module() {
   private fun unloadInternal() {
     activeConversation?.let { conversation ->
       try {
-        conversation.cancel()
+        conversation.cancelProcess()
       } catch (_: Throwable) {
       }
 
