@@ -22,3 +22,13 @@ dependencies {
   implementation "com.google.ai.edge.litertlm:litertlm-android:0.13.1"
   implementation "androidx.work:work-runtime-ktx:2.12.0"
 }
+
+
+tasks.withType(org.jetbrains.kotlin.gradle.tasks.KotlinCompile).configureEach {
+  compilerOptions {
+    // LiteRT-LM 0.13.1 publishes Kotlin 2.3 metadata, while Expo SDK 54
+    // compiles this module with the Kotlin 2.2-era toolchain. Runtime Kotlin
+    // libraries remain aligned by the CI dependency gate.
+    freeCompilerArgs.add("-Xskip-metadata-version-check")
+  }
+}
