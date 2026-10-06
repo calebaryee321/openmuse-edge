@@ -16,7 +16,12 @@ android {
 }
 
 dependencies {
-  implementation "com.google.ai.edge.litertlm:litertlm-android:0.17.1"
+  implementation("com.google.ai.edge.litertlm:litertlm-android:0.17.1") {
+    exclude group: "org.jetbrains.kotlin", module: "kotlin-stdlib"
+    exclude group: "org.jetbrains.kotlin", module: "kotlin-stdlib-jdk7"
+    exclude group: "org.jetbrains.kotlin", module: "kotlin-stdlib-jdk8"
+  }
+  implementation "org.jetbrains.kotlin:kotlin-stdlib:2.2.20"
   implementation "androidx.work:work-runtime-ktx:2.12.0"
 }
 
