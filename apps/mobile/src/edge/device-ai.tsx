@@ -6,6 +6,7 @@ import { edgeModelManager } from "./model-manager";
 import { EDGE_MODELS, EDGE_MODEL_TOTAL_GB } from "./model-registry";
 import { useEdgeModel } from "./use-model-manager";
 import { NotificationIntelligenceCard } from "./notification-intelligence";
+import { LocalAppsCard } from "./local-apps";
 
 export function DeviceAiCard() {
   return (
@@ -49,6 +50,7 @@ export function DeviceAiCard() {
         Planned local model storage: ~{EDGE_MODEL_TOTAL_GB.toFixed(1)} GB before EmbeddingGemma.
       </Text>
 
+      <LocalAppsCard />
       <MuseModelControls />
       <NotificationIntelligenceCard />
     </Card>
