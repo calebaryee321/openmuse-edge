@@ -178,7 +178,9 @@ class EdgeModelManager {
     }
 
     const resume = await readJson<ResumeState>(resumeUri(modelId));
-    const headers = authToken ? { Authorization: `Bearer ${authToken}` } : {};
+    const headers: Record<string, string> | undefined = authToken
+      ? { Authorization: `Bearer ${authToken}` }
+      : undefined;
 
     const download = FileSystem.createDownloadResumable(
       downloadUrl(modelId),
@@ -216,7 +218,7 @@ class EdgeModelManager {
       const expectedSha = MODEL_DOWNLOADS[modelId].sha256;
       const actualSha = expectedSha ? await OpenMuseEdge.sha256File(result.uri) : null;
 
-      if (expectedSha && actualSha.toLowerCase() !== expectedSha.toLowerCase()) {
+      if (expectedSha && (!actualSha || actualSha.toLowerCase() !== expectedSha.toLowerCase())) {
         await FileSystem.deleteAsync(result.uri, { idempotent: true }).catch(() => {});
         throw new Error("Downloaded model checksum did not match the catalog. The file was removed.");
       }
