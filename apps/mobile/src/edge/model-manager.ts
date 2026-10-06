@@ -130,6 +130,40 @@ class EdgeModelManager {
     for (const listener of this.listeners) listener();
   }
 
+  private syncRuntime(runtime: EdgeRuntimeStats) {
+    for (const model of EDGE_MODELS) {
+      const current = this.getSnapshot(model.id);
+      const isLoaded =
+        Boolean(current.localUri) &&
+        runtime.loaded &&
+        runtime.modelPath === current.localUri;
+
+      const nextState =
+        isLoaded
+          ? "loaded"
+          : current.state === "loaded" || current.state === "loading"
+            ? current.localUri
+              ? "installed"
+              : "not-installed"
+            : current.state;
+
+      this.snapshots.set(model.id, {
+        ...current,
+        state: nextState,
+        runtime: isLoaded
+          ? runtime
+          : {
+              available: runtime.available,
+              loaded: false,
+              modelPath: null,
+              backend: null,
+            },
+      });
+    }
+
+    for (const listener of this.listeners) listener();
+  }
+
   async refresh(modelId: EdgeAgentId) {
     this.update(modelId, { state: "checking", error: undefined });
     await ensureDirectories();
@@ -302,7 +336,7 @@ class EdgeModelManager {
 
     try {
       const runtime = await OpenMuseEdge.loadModel(current.localUri, backend);
-      this.update(modelId, { state: "loaded", runtime });
+      this.syncRuntime(runtime);
       return runtime;
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
@@ -311,9 +345,9 @@ class EdgeModelManager {
     }
   }
 
-  async unload(modelId: EdgeAgentId) {
+  async unload(_modelId: EdgeAgentId) {
     const runtime = await OpenMuseEdge.unloadModel();
-    this.update(modelId, { state: "installed", runtime });
+    this.syncRuntime(runtime);
   }
 
   async test(prompt = "Reply with exactly: Local Muse is running.") {
