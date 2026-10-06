@@ -10,6 +10,10 @@ permissions:
   contents: read
   actions: read
 
+concurrency:
+  group: android-ui-smoke-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   android-ui-smoke:
     runs-on: ubuntu-latest
@@ -69,7 +73,7 @@ jobs:
           emulator-boot-timeout: 600
           emulator-options: -no-window -noaudio -no-boot-anim -gpu swiftshader_indirect -no-snapshot
           script: |
-            set -euxo pipefail
+            set -eux
             mkdir -p "$RUNNER_TEMP/android-ui-smoke"
 
             nohup pnpm --dir apps/mobile exec expo start --dev-client --localhost --port 8081               > "$RUNNER_TEMP/android-ui-smoke/metro.log" 2>&1 &
