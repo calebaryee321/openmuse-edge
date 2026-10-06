@@ -24,7 +24,7 @@ concurrency:
 jobs:
   android-installed-smoke:
     runs-on: ubuntu-latest
-    timeout-minutes: 35
+    timeout-minutes: 45
 
     steps:
       - name: Checkout
@@ -55,15 +55,17 @@ jobs:
       - name: Generate native Android project
         run: pnpm --dir apps/mobile exec expo prebuild --platform android --clean --no-install
 
-      - name: Build installable debug APK
+      - name: Build standalone test APK
         working-directory: apps/mobile/android
-        run: ./gradlew :app:assembleDebug --stacktrace
+        env:
+          NODE_ENV: production
+        run: ./gradlew :app:assembleRelease --stacktrace
 
       - name: Locate APK
         id: apk
         shell: bash
         run: |
-          APK="$(find apps/mobile/android/app/build/outputs/apk/debug -name '*.apk' -type f | head -n 1)"
+          APK="$(find apps/mobile/android/app/build/outputs/apk/release -name '*.apk' -type f | head -n 1)"
           test -n "$APK"
           echo "path=$APK" >> "$GITHUB_OUTPUT"
           ls -lh "$APK"
@@ -77,14 +79,9 @@ jobs:
           disable-animations: true
           emulator-boot-timeout: 600
           script: |
-            set -euxo pipefail
+            set -eu
             mkdir -p "$RUNNER_TEMP/android-smoke"
 
-            nohup pnpm --dir apps/mobile exec expo start --dev-client --localhost --port 8081               > "$RUNNER_TEMP/android-smoke/metro.log" 2>&1 &
-
-            timeout 120 bash -c 'until curl -fsS http://127.0.0.1:8081 >/dev/null; do sleep 2; done'
-
-            adb reverse tcp:8081 tcp:8081
             adb install -r "${{ steps.apk.outputs.path }}"
 
             adb logcat -c
@@ -92,26 +89,29 @@ jobs:
 
             sleep 25
 
-            PID="$(adb shell pidof app.openmuse.mobile | tr -d '\r')"
-            test -n "$PID"
-            echo "OpenMuse PID: $PID"
+            adb logcat -d > "$RUNNER_TEMP/android-smoke/logcat.txt"
+            adb shell dumpsys activity activities > "$RUNNER_TEMP/android-smoke/activity.txt"
 
-            adb shell dumpsys activity activities               > "$RUNNER_TEMP/android-smoke/activity.txt"
+            PID="$(adb shell pidof app.openmuse.mobile | tr -d '\r')"
+            if [ -z "$PID" ]; then
+              echo "OpenMuse process exited after launch."
+              grep -E 'FATAL EXCEPTION:|AndroidRuntime|Fatal signal|Abort message|Process: app\.openmuse\.mobile|ReactNativeJS' "$RUNNER_TEMP/android-smoke/logcat.txt" || true
+              exit 1
+            fi
+            echo "OpenMuse PID: $PID"
 
             adb shell uiautomator dump /sdcard/openmuse-ui.xml
             adb pull /sdcard/openmuse-ui.xml "$RUNNER_TEMP/android-smoke/openmuse-ui.xml"
 
-            adb exec-out screencap -p               > "$RUNNER_TEMP/android-smoke/openmuse-screen.png"
-
-            adb logcat -d               > "$RUNNER_TEMP/android-smoke/logcat.txt"
+            adb exec-out screencap -p > "$RUNNER_TEMP/android-smoke/openmuse-screen.png"
 
             test -s "$RUNNER_TEMP/android-smoke/openmuse-screen.png"
             test -s "$RUNNER_TEMP/android-smoke/openmuse-ui.xml"
 
-            grep -Eq 'Welcome to OpenMuse|Open workspace|A little room for your day'               "$RUNNER_TEMP/android-smoke/openmuse-ui.xml"
+            grep -Eq 'Welcome to OpenMuse|Open workspace|A little room for your day|Open Device AI' "$RUNNER_TEMP/android-smoke/openmuse-ui.xml"
 
-            if grep -E 'FATAL EXCEPTION:|AndroidRuntime:.*Process: app\.openmuse\.mobile'               "$RUNNER_TEMP/android-smoke/logcat.txt"; then
-              echo "OpenMuse crashed during installed-app smoke test."
+            if grep -E 'FATAL EXCEPTION:|AndroidRuntime:.*Process: app\.openmuse\.mobile|Fatal signal.*app\.openmuse\.mobile|Abort message' "$RUNNER_TEMP/android-smoke/logcat.txt"; then
+              echo "OpenMuse crashed during standalone installed-app smoke test."
               exit 1
             fi
 
@@ -120,13 +120,13 @@ jobs:
         shell: bash
         run: |
           mkdir -p "$RUNNER_TEMP/android-smoke"
-          cp "${{ steps.apk.outputs.path }}"             "$RUNNER_TEMP/android-smoke/openmuse-debug.apk" 2>/dev/null || true
+          cp "${{ steps.apk.outputs.path }}" "$RUNNER_TEMP/android-smoke/openmuse-edge-standalone-test.apk" 2>/dev/null || true
 
       - name: Upload APK, screenshot, UI tree and logs
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: openmuse-android-smoke
+          name: openmuse-edge-standalone-test
           path: ${{ runner.temp }}/android-smoke
           if-no-files-found: warn
           retention-days: 7
