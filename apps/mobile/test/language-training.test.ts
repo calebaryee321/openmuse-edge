@@ -15,6 +15,11 @@ import {
   buildAfterActionReview,
   recommendFrenchMission,
 } from "../src/edge/language-missions.ts";
+import { parseLanguageTurnAnalysis } from "../src/edge/language-analysis.ts";
+import {
+  migrateLanguageProfile,
+  startsNewLanguageSession,
+} from "../src/edge/language-profile.ts";
 
 test("one-off mistakes do not become recurring weaknesses", () => {
   const once = recordErrorPattern([], {
@@ -140,4 +145,50 @@ test("after-action review uses explicit mission success criteria", () => {
     vocabulary: [],
   });
   assert.equal(retry.result, "retry");
+});
+
+
+test("malformed Scout output is ignored safely", () => {
+  assert.equal(parseLanguageTurnAnalysis("not json"), undefined);
+  assert.equal(parseLanguageTurnAnalysis("{broken"), undefined);
+
+  const parsed = parseLanguageTurnAnalysis(
+    'prefix {"errors":[" gender agreement ",""],"vocabulary":["bonjour"],"confidence":4,"needsDeepExplanation":true} suffix',
+  );
+  assert.deepEqual(parsed?.errors, ["gender agreement"]);
+  assert.deepEqual(parsed?.vocabulary, ["bonjour"]);
+  assert.equal(parsed?.confidence, 1);
+  assert.equal(parsed?.needsDeepExplanation, true);
+});
+
+test("legacy learner profile migrates without losing prior history", () => {
+  const migrated = migrateLanguageProfile({
+    language: "French",
+    level: "Beginner",
+    totalTurns: 9,
+    weakPoints: ["articles"],
+    vocabulary: ["bonjour"],
+    recentCorrections: ["Je voudrais..."],
+  });
+
+  assert.equal(migrated.schemaVersion, 2);
+  assert.equal(migrated.totalTurns, 9);
+  assert.deepEqual(migrated.weakPoints, ["articles"]);
+  assert.deepEqual(migrated.vocabulary, ["bonjour"]);
+  assert.equal(migrated.totalSessions, 0);
+  assert.deepEqual(migrated.completedMissions, []);
+  assert.equal(migrated.skillBands.interaction, 0);
+});
+
+test("session boundary is stable and testable", () => {
+  const now = Date.parse("2026-01-01T12:00:00.000Z");
+  assert.equal(startsNewLanguageSession(undefined, now), true);
+  assert.equal(
+    startsNewLanguageSession("2026-01-01T11:00:00.000Z", now),
+    false,
+  );
+  assert.equal(
+    startsNewLanguageSession("2026-01-01T09:00:00.000Z", now),
+    true,
+  );
 });
