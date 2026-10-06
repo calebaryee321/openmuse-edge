@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Languages, MessageCircle, Sparkles } from "lucide-react-native";
+import { Languages, MessageCircle, Sparkles, type LucideIcon } from "lucide-react-native";
 import { Pressable, Text, View } from "react-native";
 import { Sheet, colors, s } from "../ui";
 import { LanguageLearning } from "./language-learning";
@@ -14,7 +14,7 @@ function AppTile({
 }: {
   title: string;
   detail: string;
-  icon: typeof MessageCircle;
+  icon: LucideIcon;
   tint: string;
   onPress: () => void;
 }) {
