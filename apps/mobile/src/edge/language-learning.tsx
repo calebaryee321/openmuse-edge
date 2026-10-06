@@ -106,7 +106,7 @@ export function LanguageLearning() {
     [language, profile.completedMissions, profile.weakPoints],
   );
 
-  async function practice(textOverride?: string) {
+  async function practice(textOverride?: string, missionOverride?: LanguageMission) {
     const text = (textOverride ?? input).trim();
     if (!text || busy) return;
 
@@ -124,7 +124,7 @@ export function LanguageLearning() {
         mode: mode as LanguagePracticeMode,
         userText: text,
         history: before,
-        mission: activeMission ?? undefined,
+        mission: missionOverride ?? activeMission ?? undefined,
       });
       const completed: LocalTurn[] = [...withUser, { role: "assistant", text: response.text }];
       setTurns(completed);
@@ -213,6 +213,7 @@ export function LanguageLearning() {
               setHandoffs([]);
               void practice(
                 `Begin the mission "${recommendedMission.title}". Stay in character and start the scenario naturally.`,
+                recommendedMission,
               );
             }}
           >
