@@ -1,5 +1,7 @@
 name: Android installed smoke
 
+# Candidate rebuild marker
+
 on:
   push:
     branches:
