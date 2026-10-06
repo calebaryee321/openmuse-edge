@@ -10,6 +10,11 @@ import {
   shouldRunSageExplanation,
   shouldRunScoutEvaluation,
 } from "../src/edge/language-training.ts";
+import {
+  FRENCH_MISSIONS,
+  buildAfterActionReview,
+  recommendFrenchMission,
+} from "../src/edge/language-missions.ts";
 
 test("one-off mistakes do not become recurring weaknesses", () => {
   const once = recordErrorPattern([], {
@@ -103,4 +108,36 @@ test("normalization and skill bands are bounded", () => {
   assert.equal(normalizeErrorKey("  Gender—Agreement!! "), "gender agreement");
   assert.equal(clampBand(-9), 0);
   assert.equal(clampBand(9), 4);
+});
+
+
+test("mission recommender advances beyond completed beginner missions", () => {
+  const mission = recommendFrenchMission({
+    completedMissionIds: ["fr-cafe-order"],
+    recurringWeakPoints: [],
+  });
+  assert.equal(mission.id, "fr-hotel-checkin");
+});
+
+test("after-action review uses explicit mission success criteria", () => {
+  const mission = FRENCH_MISSIONS[0];
+  const aar = buildAfterActionReview({
+    mission,
+    metCriteria: mission.successCriteria.slice(0, 3),
+    strengths: ["polite request"],
+    weaknesses: ["bill vocabulary"],
+    corrections: [],
+    vocabulary: ["l'addition"],
+  });
+  assert.equal(aar.result, "completed");
+
+  const retry = buildAfterActionReview({
+    mission,
+    metCriteria: [],
+    strengths: [],
+    weaknesses: ["could not complete the order"],
+    corrections: [],
+    vocabulary: [],
+  });
+  assert.equal(retry.result, "retry");
 });
