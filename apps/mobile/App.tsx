@@ -3,6 +3,7 @@ import { StatusBar } from "expo-status-bar";
 import {
   Bell,
   Check,
+  Cloud,
   Lightbulb,
   type LucideIcon,
   Menu,
@@ -72,7 +73,7 @@ export default function App() {
   const [accessKey, setAccessKey] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const [deviceAiOpen, setDeviceAiOpen] = useState(false);
+  const [workspaceOpen, setWorkspaceOpen] = useState(false);
   const connect = useCallback(async (key?: string) => {
     setBusy(true);
     setError("");
@@ -96,50 +97,94 @@ export default function App() {
           <WorkspaceApp token={token} />
         </CopilotKitProvider>
       ) : (
-        <SafeAreaView style={{ flex: 1, backgroundColor: colors.canvas }}>
+        <SafeAreaView style={{ flex: 1, backgroundColor: "#F6F7F9" }}>
           <ScrollView
             keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
             contentContainerStyle={{
-              flexGrow: 1,
-              justifyContent: deviceAiOpen ? "flex-start" : "center",
               alignItems: "center",
-              padding: 24,
+              paddingHorizontal: 18,
+              paddingTop: 14,
+              paddingBottom: 40,
             }}
           >
-            <View style={{ width: "100%", maxWidth: 520, gap: 22, alignItems: "center" }}>
-              <Mascot size={72} />
-              <Text
-                style={{ fontSize: 32, color: colors.text, letterSpacing: -1, fontWeight: "500" }}
-              >
-                Welcome to OpenMuse.
-              </Text>
-              <Text style={[s.muted, { textAlign: "center" }]}>A little room for your day.</Text>
-              {busy ? (
-                <ActivityIndicator color={colors.blueDark} />
-              ) : (
-                <Card style={{ width: "100%", gap: 12 }}>
+            <View style={{ width: "100%", maxWidth: 560, gap: 20 }}>
+              <View style={[s.between, { paddingHorizontal: 2 }]}>
+                <View style={[s.row, { gap: 10 }]}>
+                  <Mascot size={44} />
+                  <View style={{ gap: 1 }}>
+                    <Text
+                      style={{
+                        color: colors.text,
+                        fontSize: 19,
+                        fontWeight: "700",
+                        letterSpacing: -0.4,
+                      }}
+                    >
+                      OpenMuse
+                    </Text>
+                    <Text style={s.small}>Private AI companion</Text>
+                  </View>
+                </View>
+
+                <Pressable
+                  accessibilityRole="button"
+                  onPress={() => setWorkspaceOpen((value) => !value)}
+                  style={({ pressed }) => ({
+                    width: 42,
+                    height: 42,
+                    borderRadius: 16,
+                    alignItems: "center",
+                    justifyContent: "center",
+                    backgroundColor: pressed ? "#E9EBEF" : "#FFFFFF",
+                    borderWidth: 1,
+                    borderColor: "#E9EBEF",
+                  })}
+                >
+                  <Cloud size={18} color={colors.text} />
+                </Pressable>
+              </View>
+
+              {workspaceOpen && (
+                <Card
+                  style={{
+                    gap: 12,
+                    padding: 18,
+                    borderWidth: 1,
+                    borderColor: "#E7E9ED",
+                    backgroundColor: "#FFFFFF",
+                  }}
+                >
+                  <View style={{ gap: 3 }}>
+                    <Text style={[s.heading, { fontSize: 18 }]}>Connect workspace</Text>
+                    <Text style={s.small}>
+                      Optional. Your local AI works without a remote workspace.
+                    </Text>
+                  </View>
                   <ErrorNotice error={error} />
                   <Field
                     label="Workspace access key"
                     value={accessKey}
                     onChangeText={setAccessKey}
                     secureTextEntry
-                    placeholder="Required for a live workspace"
+                    placeholder="Enter access key"
                   />
-                  <Button primary onPress={() => void connect(accessKey || undefined)}>
-                    Open workspace
-                  </Button>
-                  <Button onPress={() => setDeviceAiOpen((value) => !value)}>
-                    {deviceAiOpen ? "Hide Device AI" : "Open Device AI"}
+                  <Button
+                    primary
+                    busy={busy}
+                    onPress={() => void connect(accessKey || undefined)}
+                  >
+                    Connect
                   </Button>
                   <Text style={s.small}>
                     {API_CONFIGURED
-                      ? `Device AI works locally without a workspace connection. Remote workspace features use ${API_URL}.`
-                      : "Device AI works locally without a workspace connection. Remote workspace is not configured in this phone build."}
+                      ? `Remote workspace: ${API_URL}`
+                      : "Remote workspace is not configured in this phone build."}
                   </Text>
                 </Card>
               )}
-              {deviceAiOpen && <DeviceAiCard />}
+
+              <DeviceAiCard />
             </View>
           </ScrollView>
         </SafeAreaView>
