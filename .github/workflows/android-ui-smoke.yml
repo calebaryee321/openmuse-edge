@@ -90,6 +90,11 @@ jobs:
             adb shell am start -W -a android.intent.action.VIEW               -d 'openmuse://expo-development-client/?url=http%3A%2F%2F10.0.2.2%3A8081&disableFab=1&disableAutoLaunch=1'               > "$RUNNER_TEMP/android-ui-smoke/launch.txt" 2>&1 || true
             sleep 30
 
+            # Expo development builds show a one-time developer-menu explainer.
+            # Dismiss it so the assertion/screenshot represents the OpenMuse UI.
+            adb shell input keyevent 4 || true
+            sleep 3
+
             adb logcat -d > "$RUNNER_TEMP/android-ui-smoke/logcat.txt" || true
             adb shell dumpsys activity activities > "$RUNNER_TEMP/android-ui-smoke/activity.txt" || true
             adb shell dumpsys package app.openmuse.mobile > "$RUNNER_TEMP/android-ui-smoke/package.txt" || true
