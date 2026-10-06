@@ -160,7 +160,7 @@ class OpenMuseEdgeModule : Module() {
       )
     }
 
-    AsyncFunction("unloadModel") Coroutine {
+    AsyncFunction("unloadModel") {
       unloadInternal()
       runtimeStats()
     }
