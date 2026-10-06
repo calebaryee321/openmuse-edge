@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Languages, MessageCircle, Sparkles, type LucideIcon } from "lucide-react-native";
-import { Pressable, Text, View } from "react-native";
+import { Modal, Pressable, Text, View } from "react-native";
 import { Sheet, colors, s } from "../ui";
 import { LanguageLearning } from "./language-learning";
 import { LocalChat } from "./local-chat";
@@ -98,13 +98,14 @@ export function LocalAppsCard() {
       </View>
 
       {open === "chat" && (
-        <Sheet
-          title="Chat with Muse"
-          subtitle="Private, local conversation."
-          onClose={() => setOpen(null)}
+        <Modal
+          visible
+          animationType="slide"
+          presentationStyle="fullScreen"
+          onRequestClose={() => setOpen(null)}
         >
-          <LocalChat />
-        </Sheet>
+          <LocalChat onClose={() => setOpen(null)} />
+        </Modal>
       )}
 
       {open === "language" && (
