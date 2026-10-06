@@ -16,27 +16,9 @@ android {
 }
 
 dependencies {
-  implementation("com.google.ai.edge.litertlm:litertlm-android:0.17.1") {
-    exclude group: "org.jetbrains.kotlin", module: "kotlin-stdlib"
-    exclude group: "org.jetbrains.kotlin", module: "kotlin-stdlib-jdk7"
-    exclude group: "org.jetbrains.kotlin", module: "kotlin-stdlib-jdk8"
-  }
-  implementation "org.jetbrains.kotlin:kotlin-stdlib:2.2.20"
+  // 0.13.1 stays on the Kotlin 2.2-era runtime used by Expo SDK 54.
+  // Newer LiteRT-LM 0.17.x requires kotlin-reflect 2.4.x and is not safe
+  // to mix into this app's Kotlin 2.2 toolchain.
+  implementation "com.google.ai.edge.litertlm:litertlm-android:0.13.1"
   implementation "androidx.work:work-runtime-ktx:2.12.0"
-}
-
-
-tasks.withType(org.jetbrains.kotlin.gradle.tasks.KotlinCompile).configureEach {
-  compilerOptions {
-    freeCompilerArgs.add("-Xskip-metadata-version-check")
-  }
-}
-
-
-configurations.configureEach {
-  resolutionStrategy.force(
-    "org.jetbrains.kotlin:kotlin-stdlib:2.2.20",
-    "org.jetbrains.kotlin:kotlin-stdlib-jdk7:2.2.20",
-    "org.jetbrains.kotlin:kotlin-stdlib-jdk8:2.2.20"
-  )
 }
