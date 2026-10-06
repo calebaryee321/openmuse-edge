@@ -1,0 +1,186 @@
+package app.openmuse.edge
+
+import com.google.ai.edge.litertlm.Backend
+import com.google.ai.edge.litertlm.Conversation
+import com.google.ai.edge.litertlm.Engine
+import com.google.ai.edge.litertlm.EngineConfig
+import com.google.ai.edge.litertlm.LogSeverity
+import expo.modules.kotlin.modules.Module
+import expo.modules.kotlin.modules.ModuleDefinition
+import kotlinx.coroutines.flow.collect
+
+class OpenMuseEdgeModule : Module() {
+  private var engine: Engine? = null
+  private var activeConversation: Conversation? = null
+  private var loadedModelPath: String? = null
+  private var loadedBackend: String? = null
+
+  override fun definition() = ModuleDefinition {
+    Name("OpenMuseEdge")
+
+    Events("onGenerationToken", "onGenerationComplete", "onGenerationError")
+
+    Function("getRuntimeStats") {
+      runtimeStats()
+    }
+
+    AsyncFunction("loadModel") Coroutine { modelPath: String, backend: String ->
+      unloadInternal()
+
+      val context =
+        requireNotNull(appContext.reactContext?.applicationContext) {
+          "Android application context is unavailable."
+        }
+
+      Engine.setNativeMinLogSeverity(LogSeverity.ERROR)
+
+      val requested = backend.lowercase()
+      val candidates =
+        when (requested) {
+          "npu" -> listOf("npu")
+          "gpu" -> listOf("gpu")
+          "cpu" -> listOf("cpu")
+          else -> listOf("npu", "gpu", "cpu")
+        }
+
+      var lastError: Throwable? = null
+
+      for (candidate in candidates) {
+        try {
+          val runtimeBackend =
+            when (candidate) {
+              "npu" -> Backend.NPU(nativeLibraryDir = context.applicationInfo.nativeLibraryDir)
+              "gpu" -> Backend.GPU()
+              else -> Backend.CPU()
+            }
+
+          val candidateEngine =
+            Engine(
+              EngineConfig(
+                modelPath = modelPath,
+                backend = runtimeBackend,
+                cacheDir = context.cacheDir.path,
+              ),
+            )
+
+          candidateEngine.initialize()
+
+          engine = candidateEngine
+          loadedModelPath = modelPath
+          loadedBackend = candidate
+
+          return@Coroutine runtimeStats()
+        } catch (error: Throwable) {
+          lastError = error
+        }
+      }
+
+      throw IllegalStateException(
+        "Unable to initialize LiteRT-LM for backend '$backend'.",
+        lastError,
+      )
+    }
+
+    AsyncFunction("unloadModel") Coroutine {
+      unloadInternal()
+      runtimeStats()
+    }
+
+    AsyncFunction("generate") Coroutine { prompt: String ->
+      val loadedEngine = requireEngine()
+
+      loadedEngine.createConversation().use { conversation ->
+        activeConversation = conversation
+        try {
+          conversation.sendMessage(prompt).toString()
+        } finally {
+          activeConversation = null
+        }
+      }
+    }
+
+    AsyncFunction("streamGenerate") Coroutine { prompt: String ->
+      val loadedEngine = requireEngine()
+      val output = StringBuilder()
+
+      loadedEngine.createConversation().use { conversation ->
+        activeConversation = conversation
+
+        try {
+          conversation.sendMessageAsync(prompt).collect { message ->
+            val text = message.toString()
+            output.append(text)
+            this@OpenMuseEdgeModule.sendEvent(
+              "onGenerationToken",
+              mapOf("text" to text),
+            )
+          }
+
+          val result = output.toString()
+          this@OpenMuseEdgeModule.sendEvent(
+            "onGenerationComplete",
+            mapOf("text" to result),
+          )
+          result
+        } catch (error: Throwable) {
+          this@OpenMuseEdgeModule.sendEvent(
+            "onGenerationError",
+            mapOf("message" to (error.message ?: error::class.java.simpleName)),
+          )
+          throw error
+        } finally {
+          activeConversation = null
+        }
+      }
+    }
+
+    Function("cancelGeneration") {
+      activeConversation?.cancel()
+      true
+    }
+
+    OnDestroy {
+      unloadInternal()
+    }
+  }
+
+  private fun requireEngine(): Engine =
+    requireNotNull(engine) {
+      "No local model is loaded. Call loadModel() before generation."
+    }
+
+  private fun unloadInternal() {
+    activeConversation?.let { conversation ->
+      try {
+        conversation.cancel()
+      } catch (_: Throwable) {
+      }
+
+      try {
+        conversation.close()
+      } catch (_: Throwable) {
+      }
+    }
+
+    activeConversation = null
+
+    engine?.let { loadedEngine ->
+      try {
+        loadedEngine.close()
+      } catch (_: Throwable) {
+      }
+    }
+
+    engine = null
+    loadedModelPath = null
+    loadedBackend = null
+  }
+
+  private fun runtimeStats(): Map<String, Any?> =
+    mapOf(
+      "available" to true,
+      "loaded" to (engine != null),
+      "modelPath" to loadedModelPath,
+      "backend" to loadedBackend,
+    )
+}
