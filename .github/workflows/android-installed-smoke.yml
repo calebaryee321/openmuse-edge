@@ -1,6 +1,13 @@
 name: Android installed smoke
 
 on:
+  push:
+    branches:
+      - feature/openmuse-edge-v0
+    paths:
+      - "apps/mobile/modules/openmuse-edge/**"
+      - "apps/mobile/src/edge/**"
+      - ".github/workflows/android-installed-smoke.yml"
   workflow_dispatch:
 
 permissions:
