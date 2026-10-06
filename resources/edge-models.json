@@ -1,0 +1,30 @@
+{
+  "version": 1,
+  "models": [
+    {
+      "id": "scout",
+      "label": "Scout",
+      "repository": "litert-community/Qwen3.5-0.8B",
+      "artifact": "Qwen3.5-0.8B_int8.litertlm",
+      "approximateSizeGb": 0.96,
+      "role": "triage"
+    },
+    {
+      "id": "muse",
+      "label": "Muse",
+      "repository": "litert-community/gemma-4-E2B-it-litert-lm",
+      "artifact": "gemma-4-E2B-it_Google_Tensor_G5.litertlm",
+      "fallbackArtifact": "gemma-4-E2B-it.litertlm",
+      "approximateSizeGb": 3.11,
+      "role": "orchestrator"
+    },
+    {
+      "id": "sage",
+      "label": "Sage",
+      "repository": "litert-community/Qwen3.5-4B",
+      "artifact": "Qwen3.5-4B_mixed_int4.litertlm",
+      "approximateSizeGb": 2.57,
+      "role": "deep-reasoning"
+    }
+  ]
+}
