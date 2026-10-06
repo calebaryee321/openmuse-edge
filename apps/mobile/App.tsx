@@ -32,7 +32,7 @@ import {
   IdeasScreen,
 } from "./src/agent-ui";
 import { AgentWorkspaceProvider, useAgentWorkspace } from "./src/agent-workspace";
-import { API_URL, createSession, MuseApi } from "./src/api";
+import { API_CONFIGURED, API_URL, createSession, MuseApi } from "./src/api";
 import { ChatScreen, WorkspaceTools } from "./src/chat";
 import { ComputerEntry } from "./src/computer";
 import { ComputerDraftProvider } from "./src/computer-drafts";
@@ -70,7 +70,7 @@ const titles: Partial<Record<Section, { title: string; subtitle: string }>> = {
 export default function App() {
   const [token, setToken] = useState("");
   const [accessKey, setAccessKey] = useState("");
-  const [busy, setBusy] = useState(true);
+  const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [deviceAiOpen, setDeviceAiOpen] = useState(false);
   const connect = useCallback(async (key?: string) => {
@@ -85,9 +85,6 @@ export default function App() {
       setBusy(false);
     }
   }, []);
-  useEffect(() => {
-    void connect();
-  }, [connect]);
   return (
     <SafeAreaProvider>
       <StatusBar style="dark" />
@@ -136,8 +133,9 @@ export default function App() {
                     {deviceAiOpen ? "Hide Device AI" : "Open Device AI"}
                   </Button>
                   <Text style={s.small}>
-                    Device AI works locally without a workspace connection. Remote workspace
-                    features still use {API_URL}.
+                    {API_CONFIGURED
+                      ? `Device AI works locally without a workspace connection. Remote workspace features use ${API_URL}.`
+                      : "Device AI works locally without a workspace connection. Remote workspace is not configured in this phone build."}
                   </Text>
                 </Card>
               )}
