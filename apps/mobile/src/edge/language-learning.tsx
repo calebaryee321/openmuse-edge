@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { SendHorizontal } from "lucide-react-native";
 import { Pressable, Text, View } from "react-native";
 import { Button, Card, Chip, ErrorNotice, Field, colors, s } from "../ui";
 import { askMuse, type LocalTurn } from "./local-assistant";
@@ -194,7 +195,14 @@ export function LanguageLearning() {
       </View>
 
       {turns.length === 0 && (
-        <Card style={{ backgroundColor: colors.sky, padding: 15, gap: 10 }}>
+        <Card
+          style={{
+            backgroundColor: mode === "Travel role-play" ? "#FFF3E7" : colors.sky,
+            padding: 18,
+            gap: 10,
+            borderRadius: 24,
+          }}
+        >
           <Text style={s.heading}>{mode}</Text>
           <Text style={s.muted}>
             {mode === "Travel role-play"
@@ -256,10 +264,17 @@ export function LanguageLearning() {
         multiline
         placeholder={mode === "Correction" ? "Type a sentence to correct…" : "Reply to your tutor…"}
         editable={!busy}
+        style={{ minHeight: 72 }}
       />
 
       <View style={[s.row, { gap: 8, flexWrap: "wrap" }]}>
-        <Button primary busy={busy} disabled={!input.trim()} onPress={() => void practice()}>
+        <Button
+          primary
+          icon={SendHorizontal}
+          busy={busy}
+          disabled={!input.trim()}
+          onPress={() => void practice()}
+        >
           Send
         </Button>
         {turns.length > 0 && (
