@@ -8,6 +8,9 @@ import com.google.ai.edge.litertlm.LogSeverity
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
 import kotlinx.coroutines.flow.collect
+import java.io.File
+import java.io.FileInputStream
+import java.security.MessageDigest
 
 class OpenMuseEdgeModule : Module() {
   private var engine: Engine? = null
@@ -84,6 +87,28 @@ class OpenMuseEdgeModule : Module() {
     AsyncFunction("unloadModel") Coroutine {
       unloadInternal()
       runtimeStats()
+    }
+
+    AsyncFunction("sha256File") Coroutine { filePath: String ->
+      val normalizedPath = filePath.removePrefix("file://")
+      val file = File(normalizedPath)
+
+      require(file.exists() && file.isFile) {
+        "Model file does not exist: $filePath"
+      }
+
+      val digest = MessageDigest.getInstance("SHA-256")
+      val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
+
+      FileInputStream(file).use { input ->
+        while (true) {
+          val count = input.read(buffer)
+          if (count <= 0) break
+          digest.update(buffer, 0, count)
+        }
+      }
+
+      digest.digest().joinToString("") { byte -> "%02x".format(byte) }
     }
 
     AsyncFunction("generate") Coroutine { prompt: String ->
