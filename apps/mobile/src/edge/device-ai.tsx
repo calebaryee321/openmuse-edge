@@ -372,7 +372,7 @@ function MuseModelControls() {
               void act(() => edgeModelManager.install("muse", token.trim() || undefined))
             }
           >
-            Download Muse · ~3.1 GB
+            Download Muse · ~2.0 GB
           </Button>
         </>
       )}
