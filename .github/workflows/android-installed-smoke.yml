@@ -95,17 +95,26 @@ jobs:
           script: bash .github/scripts/android-standalone-smoke.sh "${{ steps.apk.outputs.path }}"
 
       - name: Collect APK
-        if: always()
+        if: success()
         shell: bash
         run: |
           mkdir -p "$RUNNER_TEMP/android-smoke"
           cp "${{ steps.apk.outputs.path }}" "$RUNNER_TEMP/android-smoke/openmuse-edge-standalone-test.apk" 2>/dev/null || true
 
-      - name: Upload APK, screenshot, UI tree and logs
-        if: always()
+      - name: Upload passing APK and QA evidence
+        if: success()
         uses: actions/upload-artifact@v4
         with:
           name: openmuse-edge-standalone-test
+          path: ${{ runner.temp }}/android-smoke
+          if-no-files-found: warn
+          retention-days: 7
+
+      - name: Upload failed QA diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: openmuse-edge-failed-qa
           path: ${{ runner.temp }}/android-smoke
           if-no-files-found: warn
           retention-days: 7
