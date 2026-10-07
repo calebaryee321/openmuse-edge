@@ -21,6 +21,7 @@ function AppTile({
   return (
     <Pressable
       accessibilityRole="button"
+      accessibilityLabel={title}
       onPress={onPress}
       style={({ pressed }) => ({
         flex: 1,
