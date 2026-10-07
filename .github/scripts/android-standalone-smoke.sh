@@ -126,3 +126,84 @@ if [[ -z "$PID_AFTER" || "$PID_AFTER" != "$PID" ]]; then
 fi
 
 echo "Standalone APK launch QA passed with stable process $PID."
+
+dump_ui() {
+  local name="$1"
+  adb shell uiautomator dump "/sdcard/$name.xml" >/dev/null
+  adb pull "/sdcard/$name.xml" "$OUT_DIR/$name.xml" >/dev/null
+}
+
+tap_ui_label() {
+  local label="$1"
+  local xml="$2"
+  local coords
+  coords="$(python3 - "$label" "$xml" <<'PY'
+import re, sys, xml.etree.ElementTree as ET
+label, path = sys.argv[1], sys.argv[2]
+root = ET.parse(path).getroot()
+for node in root.iter("node"):
+    if node.attrib.get("text") == label or node.attrib.get("content-desc") == label:
+        m = re.fullmatch(r"\[(\d+),(\d+)\]\[(\d+),(\d+)\]", node.attrib.get("bounds",""))
+        if m:
+            x1,y1,x2,y2 = map(int,m.groups())
+            print(f"{(x1+x2)//2} {(y1+y2)//2}")
+            break
+PY
+)"
+  if [[ -z "$coords" ]]; then
+    echo "Could not find UI label: $label"
+    return 1
+  fi
+  adb shell input tap $coords
+}
+
+echo "Exercising model-backed local app navigation..."
+dump_ui "openmuse-ui-before-local-apps"
+tap_ui_label "Chat" "$OUT_DIR/openmuse-ui-before-local-apps.xml"
+sleep 5
+dump_ui "openmuse-ui-chat"
+grep -Eq 'What can I help with\?|Muse not installed|Downloaded · ready to start|Starting local model' "$OUT_DIR/openmuse-ui-chat.xml"
+
+PID_CHAT="$(adb shell pidof "$PACKAGE" | tr -d '\r' || true)"
+if [[ "$PID_CHAT" != "$PID" ]]; then
+  echo "Process changed while opening Muse Chat: before=$PID chat=$PID_CHAT"
+  adb logcat -d > "$OUT_DIR/logcat-chat-failure.txt" || true
+  exit 1
+fi
+
+adb shell input keyevent 4
+sleep 3
+dump_ui "openmuse-ui-after-chat"
+
+tap_ui_label "Language" "$OUT_DIR/openmuse-ui-after-chat.xml"
+sleep 5
+dump_ui "openmuse-ui-language"
+grep -Eq 'Language Coach|Local conversational practice powered by Muse' "$OUT_DIR/openmuse-ui-language.xml"
+
+PID_LANGUAGE="$(adb shell pidof "$PACKAGE" | tr -d '\r' || true)"
+if [[ "$PID_LANGUAGE" != "$PID" ]]; then
+  echo "Process changed while opening Language Coach: before=$PID language=$PID_LANGUAGE"
+  adb logcat -d > "$OUT_DIR/logcat-language-failure.txt" || true
+  exit 1
+fi
+
+adb shell input keyevent 3
+sleep 3
+adb shell monkey -p "$PACKAGE" -c android.intent.category.LAUNCHER 1 >/dev/null
+sleep 5
+PID_RESUME="$(adb shell pidof "$PACKAGE" | tr -d '\r' || true)"
+echo "$PID_RESUME" > "$OUT_DIR/pid-after-resume.txt"
+if [[ "$PID_RESUME" != "$PID" ]]; then
+  echo "Process changed across background/resume: before=$PID resume=$PID_RESUME"
+  adb logcat -d > "$OUT_DIR/logcat-resume-failure.txt" || true
+  exit 1
+fi
+
+adb logcat -d > "$OUT_DIR/logcat-final.txt"
+if grep -E 'FATAL EXCEPTION:|AndroidRuntime:.*Process: app\.openmuse\.mobile|Fatal signal.*app\.openmuse\.mobile|Abort message:.*openmuse' "$OUT_DIR/logcat-final.txt"; then
+  echo "OpenMuse emitted a fatal crash signature during local-app navigation QA."
+  exit 1
+fi
+
+echo "Standalone APK navigation QA passed with stable process $PID."
+
