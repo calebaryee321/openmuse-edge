@@ -128,7 +128,11 @@ class OpenMuseEdgeModule : Module() {
           "npu" -> listOf("npu")
           "gpu" -> listOf("gpu")
           "cpu" -> listOf("cpu")
-          else -> listOf("npu", "gpu", "cpu")
+          // Keep NPU opt-in for now. On some Tensor G5 / Pixel 10 setups,
+          // NPU delegate initialization can terminate the process before the
+          // JVM can catch the failure and fall back. Auto therefore prefers
+          // the stable GPU path, then CPU.
+          else -> listOf("gpu", "cpu")
         }
 
       var lastError: Throwable? = null
