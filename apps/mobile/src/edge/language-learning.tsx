@@ -108,7 +108,7 @@ export function LanguageLearning() {
           snapshot.state !== "loaded" &&
           snapshot.state !== "loading"
         ) {
-          await edgeModelManager.load("muse", "auto");
+          await edgeModelManager.load("muse");
         }
       } catch (value) {
         if (active) setError(value instanceof Error ? value.message : String(value));
