@@ -50,7 +50,7 @@ export function LocalChat({ onClose }: { onClose: () => void }) {
           snapshot.state !== "loaded" &&
           snapshot.state !== "loading"
         ) {
-          await edgeModelManager.load("muse", "auto");
+          await edgeModelManager.load("muse");
         }
       } catch (value) {
         if (active) setError(value instanceof Error ? value.message : String(value));
@@ -107,7 +107,7 @@ export function LocalChat({ onClose }: { onClose: () => void }) {
     setBusy(true);
     setError("");
     try {
-      await edgeModelManager.load("muse", "auto");
+      await edgeModelManager.load("muse");
     } catch (value) {
       setError(value instanceof Error ? value.message : String(value));
     } finally {
