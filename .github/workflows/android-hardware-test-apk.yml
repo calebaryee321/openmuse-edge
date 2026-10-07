@@ -1,0 +1,60 @@
+name: Android hardware test APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - feature/openmuse-edge-v0
+    paths:
+      - ".github/workflows/android-hardware-test-apk.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  build-hardware-test-apk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Node 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: pnpm
+        uses: pnpm/action-setup@v4
+      - name: Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - name: Install JS dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Validate Android JS bundle
+        run: pnpm --dir apps/mobile build:android
+      - name: Generate native Android project
+        run: pnpm --dir apps/mobile exec expo prebuild --platform android --clean --no-install
+      - name: Build Pixel hardware-test APK
+        working-directory: apps/mobile/android
+        env:
+          NODE_ENV: production
+        run: ./gradlew :app:assembleRelease --stacktrace
+      - name: Stage hardware-test APK
+        shell: bash
+        run: |
+          APK="$(find apps/mobile/android/app/build/outputs/apk/release -name '*.apk' -type f | head -n 1)"
+          test -n "$APK"
+          mkdir -p "$RUNNER_TEMP/openmuse-hardware-test"
+          cp "$APK" "$RUNNER_TEMP/openmuse-hardware-test/openmuse-edge-pixel-hardware-test.apk"
+          sha256sum "$RUNNER_TEMP/openmuse-hardware-test/openmuse-edge-pixel-hardware-test.apk" | tee "$RUNNER_TEMP/openmuse-hardware-test/SHA256SUMS.txt"
+          printf 'Commit: %s\nPurpose: Pixel hardware validation; not emulator-QA-approved.\n' "$GITHUB_SHA" > "$RUNNER_TEMP/openmuse-hardware-test/BUILD.txt"
+      - name: Upload Pixel hardware-test APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: openmuse-edge-pixel-hardware-test
+          path: ${{ runner.temp }}/openmuse-hardware-test
+          if-no-files-found: error
+          retention-days: 7
