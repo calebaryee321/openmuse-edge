@@ -52,7 +52,7 @@ const MODEL_DOWNLOADS: Record<EdgeAgentId, { repo: string; artifact: string; sha
   },
   muse: {
     repo: "litert-community/gemma-4-E2B-it-litert-lm",
-    artifact: "gemma-4-E2B-it_Google_Tensor_G5.litertlm",
+    artifact: "gemma-4-E2B-it-gpu.litertlm",
   },
   sage: {
     repo: "litert-community/Qwen3.5-4B",
@@ -346,7 +346,7 @@ class EdgeModelManager {
     });
   }
 
-  async load(modelId: EdgeAgentId, backend: "auto" | "npu" | "gpu" | "cpu" = "auto") {
+  async load(modelId: EdgeAgentId, backend?: "auto" | "npu" | "gpu" | "cpu") {
     const existing = this.loads.get(modelId);
     if (existing) return existing;
 
@@ -366,7 +366,8 @@ class EdgeModelManager {
         this.update(modelId, { state: "loading", error: undefined });
 
         try {
-          const loaded = await OpenMuseEdge.loadModel(current.localUri, backend);
+          const preferredBackend = EDGE_MODELS.find((item) => item.id === modelId)?.preferredBackend ?? "auto";
+          const loaded = await OpenMuseEdge.loadModel(current.localUri, backend ?? preferredBackend);
           this.syncRuntime(loaded);
           return loaded;
         } catch (error) {
